@@ -1,0 +1,247 @@
+const API_URL = import.meta.env.PROD
+    ? window.location.origin
+    : window.location.protocol + '//' + window.location.hostname + ':3000';
+
+const getHeaders = () => {
+    const token = localStorage.getItem('auth_token');
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+};
+
+const handleResponse = async (response) => {
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('auth_token');
+            // Optional: Redirect to login
+            // window.location.href = '/login'; 
+        }
+        const errorText = await response.text();
+        try {
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || errorJson.message || 'API Error');
+        } catch (e) {
+            throw new Error(errorText || 'API Error');
+        }
+    }
+    // Check if response has content
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json();
+    } else {
+        return response.text();
+    }
+};
+
+// Generic Entity Handler
+const createEntityHandler = (entityName) => ({
+    list: async (sortOrOptions, limit) => {
+        const params = new URLSearchParams();
+        if (typeof sortOrOptions === 'object') {
+            const { sort, limit: l, include } = sortOrOptions;
+            if (sort) params.append('sort', sort);
+            if (l) params.append('limit', l);
+            if (include) params.append('include', include);
+        } else {
+            if (sortOrOptions) params.append('sort', sortOrOptions);
+            if (limit) params.append('limit', limit);
+        }
+
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/list?${params.toString()}`, {
+            headers: getHeaders()
+        });
+        return handleResponse(res);
+    },
+
+    get: async (id) => {
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/${id}`, {
+            headers: getHeaders()
+        });
+        return handleResponse(res);
+    },
+
+    create: async (data) => {
+        const res = await fetch(`${API_URL}/api/entities/${entityName}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data)
+        });
+        return handleResponse(res);
+    },
+
+    update: async (id, data) => {
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/${id}`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: JSON.stringify(data)
+        });
+        return handleResponse(res);
+    },
+
+    delete: async (id) => {
+        console.log(`[CLIENT API] Deleting entity ${entityName} with ID ${id}`);
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        console.log(`[CLIENT API] Delete response status: ${res.status} for ${entityName} ${id}`);
+        return handleResponse(res);
+    },
+
+    filter: async (filters, include) => {
+        const params = new URLSearchParams();
+        if (include) params.append('include', include);
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/filter?${params.toString()}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(filters)
+        });
+        return handleResponse(res);
+    },
+
+    bulkDelete: async () => {
+        const res = await fetch(`${API_URL}/api/entities/${entityName}/bulk?confirm=true`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        return handleResponse(res);
+    }
+});
+
+export const neunoi = {
+    auth: {
+        login: async (email, password) => {
+            const res = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await handleResponse(res);
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+            }
+            return data;
+        },
+        register: async (email, password, full_name) => {
+            const res = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, full_name })
+            });
+            const data = await handleResponse(res);
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+            }
+            return data;
+        },
+        me: async () => {
+            const res = await fetch(`${API_URL}/auth/me`, {
+                headers: getHeaders()
+            });
+            return handleResponse(res);
+        },
+        updateProfile: async (data) => {
+            const res = await fetch(`${API_URL}/auth/update`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify(data)
+            });
+            return handleResponse(res);
+        },
+        changePassword: async (currentPassword, newPassword) => {
+            const res = await fetch(`${API_URL}/auth/change-password`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+            return handleResponse(res);
+        },
+        isAuthenticated: async () => {
+            const token = localStorage.getItem('auth_token');
+            return !!token;
+        },
+        redirectToLogin: (redirectUrl) => {
+            const url = redirectUrl ? `/Login?redirect=${encodeURIComponent(redirectUrl)}` : '/Login';
+            window.location.href = url;
+        },
+        logout: () => {
+            localStorage.removeItem('auth_token');
+            window.location.href = '/Login';
+        }
+    },
+
+    entities: {
+        User: createEntityHandler('User'),
+        TurnoHost: createEntityHandler('TurnoHost'),
+        ProfiloSocio: createEntityHandler('ProfiloSocio'),
+        TransazioneNEU: createEntityHandler('TransazioneNEU'),
+        SalaRiunioni: createEntityHandler('SalaRiunioni'),
+        PrenotazioneSala: createEntityHandler('PrenotazioneSala'),
+        IngressoCoworking: createEntityHandler('IngressoCoworking'),
+        NotificaAbbonamento: createEntityHandler('NotificaAbbonamento'),
+        TaskNotifica: createEntityHandler('TaskNotifica'),
+        ProfiloCoworker: createEntityHandler('ProfiloCoworker'),
+        OrdineCoworking: createEntityHandler('OrdineCoworking'),
+        DatiFatturazione: createEntityHandler('DatiFatturazione'),
+        AmbitoVolontariato: createEntityHandler('AmbitoVolontariato'),
+        AzioneVolontariato: createEntityHandler('AzioneVolontariato'),
+        DichiarazioneVolontariato: createEntityHandler('DichiarazioneVolontariato'),
+        TipoAbbonamento: createEntityHandler('TipoAbbonamento'),
+        AbbonamentoUtente: createEntityHandler('AbbonamentoUtente'),
+        SistemaSetting: createEntityHandler('SistemaSetting')
+    },
+
+    integrations: {
+        Core: {
+            UploadFile: async ({ file }) => {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const res = await fetch(`${API_URL}/api/integrations/upload`, {
+                    method: 'POST',
+                    headers: {
+                        ...(localStorage.getItem('auth_token') ? { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } : {})
+                        // Do NOT set Content-Type for FormData, browser does it with boundary
+                    },
+                    body: formData
+                });
+                return handleResponse(res);
+            },
+
+            ExtractDataFromUploadedFile: async ({ file_url, json_schema }) => {
+                const res = await fetch(`${API_URL}/api/integrations/extract`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ file_url, json_schema })
+                });
+                return handleResponse(res);
+            },
+
+            // Mocks for other methods if needed
+            GenerateImage: async () => ({ url: 'https://placehold.co/600x400' }),
+            SendEmail: async ({ to, subject, text, html }) => {
+                const res = await fetch(`${API_URL}/api/integrations/send-email`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ to, subject, text, html })
+                });
+                return handleResponse(res);
+            },
+            CreateFileSignedUrl: async () => ({ url: '' }),
+            InvokeLLM: async () => ({ output: '' })
+        }
+    },
+
+    coworking: {
+        sendReceipt: async (orderId) => {
+            const res = await fetch(`${API_URL}/api/coworking/orders/${orderId}/send-receipt`, {
+                method: 'POST',
+                headers: getHeaders()
+            });
+            return handleResponse(res);
+        }
+    }
+};
+
+export const createClient = () => neunoi;

@@ -1,0 +1,2 @@
+first_name,last_name,genere:maschio|femmina|altro|preferisco_non_rispondere,data_nascita:YYYY-MM-DD,citta_residenza,paese_residenza,email,telefono,ragione_sociale,p_iva,codice_univoco,stato:check_in_completato|iscritto,privacy_accettata:true|false,newsletter:true|false,user_id
+Jevgeni,Bogatyrjov,maschio,06/09/89,Tallinn,Estonia,jevgeni@esgrid.com,37256577475,,,,,true,,07/01/25

@@ -1,0 +1,2 @@
+profilo_email,tipo_abbonamento_nome,data_inizio:YYYY-MM-DD,data_scadenza:YYYY-MM-DD,attivo:true|false,metodo_pagamento,importo,note
+riccardobuccheri87@gmail.com,Mensile flex mesi successivi,15/2/2026,15/7/2026,TRUE,NEU,400,

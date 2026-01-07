@@ -1,0 +1,13 @@
+Found 2 users out of 2
+
+=== User: Michelangelo Pavia (ID: 2) ===
+Abbonamenti (1):
+- ID: 2, Nome: Mensile flex, Scadenza: Mon Feb 02 2026 01:00:00 GMT+0100 (Ora standard dell’Europa centrale), Stato: attivo, Attivo: true, Ore: 6/8
+Prenotazioni (0):
+
+=== User: Beppe Castellucci (ID: 3) ===
+Abbonamenti (0):
+Prenotazioni (0):
+
+=== Tutte le Prenotazioni (1) ===
+- ID: 1, UserID: null, Inizio: Mon Jan 05 2026 09:00:00 GMT+0100 (Ora standard dell’Europa centrale), Fine: Mon Jan 05 2026 15:00:00 GMT+0100 (Ora standard dell’Europa centrale), Titolo: null

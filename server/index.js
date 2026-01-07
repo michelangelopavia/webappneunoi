@@ -1,0 +1,104 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+require('dotenv').config();
+const sequelize = require('./database');
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err, origin) => {
+    console.error(`Caught exception: ${err}\n` + `Exception origin: ${origin}`);
+});
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static files (uploads)
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Routes
+app.use('/auth', require('./routes/auth'));
+app.use('/api/entities', require('./routes/entities'));
+app.use('/api/integrations', require('./routes/integrations'));
+app.use('/api/coworking', require('./routes/coworking'));
+
+app.get('/', (req, res) => {
+    res.json({ message: 'Neu Noi Gestione Associazione API' });
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Start Server
+const bcrypt = require('bcryptjs');
+const { User } = require('./models');
+
+sequelize.sync({ force: false }).then(async () => {
+    console.log('Database synced');
+
+    // Seed default admin if no users exist
+    const userCount = await User.count();
+    if (userCount === 0) {
+        const hashedPassword = await bcrypt.hash('password123', 10);
+        await User.create({
+            email: 'admin@neu.noi',
+            password_hash: hashedPassword,
+            full_name: 'Admin NEU',
+            role: 'super_admin',
+            roles: ['super_admin', 'admin', 'socio'],
+            saldo_neu: 0
+        });
+        console.log('Default admin created: admin@neu.noi / password123');
+    }
+
+    // Seed "Altro" Ambito if missing
+    const { AmbitoVolontariato } = require('./models');
+    const altroAmbito = await AmbitoVolontariato.findOne({ where: { nome: 'Altro' } });
+    if (!altroAmbito) {
+        await AmbitoVolontariato.create({
+            nome: 'Altro',
+            descrizione: 'Ambito generico per attività non categorizzate',
+            attivo: true
+        });
+        console.log('Ambito "Altro" created');
+    }
+
+    // Seed default settings
+    const { SistemaSetting } = require('./models');
+    const checkinMail = await SistemaSetting.findOne({ where: { chiave: 'testo_mail_checkin' } });
+    if (!checkinMail) {
+        await SistemaSetting.create({
+            chiave: 'testo_mail_checkin',
+            valore: 'Gentile {nome},\n\nBenvenuto/a in neu [nòi]! Siamo felici di averti con noi oggi.\n\nIl tuo check-in è stato registrato correttamente.\n\nBuon lavoro!',
+            descrizione: 'Testo della mail inviata al check-in. Usa {nome} per il nome completo.'
+        });
+        console.log('Default check-in email setting created');
+    }
+
+    const { processNotifications } = require('./utils/notification_engine');
+
+    // Run notification check on startup
+    processNotifications();
+
+    // Run every 12 hours
+    setInterval(processNotifications, 12 * 60 * 60 * 1000);
+
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+});

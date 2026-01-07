@@ -1,0 +1,28 @@
+=== Tutti gli Abbonamenti (3) ===
+- ID: 1, UserID: null, Nome: Michelangelo Pavia, Tipo: Mensile flex, Scadenza: Sat Jan 03 2026 01:00:00 GMT+0100 (Ora standard dell’Europa centrale), Stato: attivo
+- ID: 2, UserID: 2, Nome: Michelangelo Pavia, Tipo: Mensile flex, Scadenza: Mon Feb 02 2026 01:00:00 GMT+0100 (Ora standard dell’Europa centrale), Stato: attivo
+- ID: 3, UserID: null, Nome: Beppe Castellucci, Tipo: Mensile flex, Scadenza: Mon Jan 05 2026 01:00:00 GMT+0100 (Ora standard dell’Europa centrale), Stato: attivo
+
+=== Tutti gli Utenti (22) ===
+- ID: 1, Email: admin@neu.noi, Nome: Admin NEU
+- ID: 2, Email: michelangelo@neunoi.it, Nome: Michelangelo Pavia
+- ID: 3, Email: beppe@neunoi.it, Nome: Beppe Castellucci
+- ID: 4, Email: riccardobuccheri87@gmail.com, Nome: Riccardo Buccheri
+- ID: 5, Email: rosa.guagli@gmail.com, Nome: Rosa Guagliardo
+- ID: 6, Email: andrea.foschini5@gmail.com, Nome: Andrea Foschini
+- ID: 7, Email: amritahmishra@gmail.com, Nome: Amrita Mishra
+- ID: 8, Email: clara.failla@gmail.com, Nome: Clara Failla
+- ID: 9, Email: geracigiulia27@gmail.com, Nome: Giulia Geraci
+- ID: 10, Email: rafaelahilariopascoal@gmail.com, Nome: Rafaela Pascoal
+- ID: 11, Email: thalassamu@gmail.com, Nome: Alexandra D'Onofrio
+- ID: 12, Email: simdig90@gmail.com, Nome: Simone Di Giovanni
+- ID: 13, Email: mail@helenhecker.de, Nome: Helen Hecker
+- ID: 14, Email: barbaramoavero@gmail.com, Nome: Barbara Moavero
+- ID: 15, Email: l.tuttolomondo@sguardiurbani.com, Nome: Luisa Tuttolomondo
+- ID: 16, Email: ntn.marchi@gmail.com, Nome: Antonio Marchi
+- ID: 17, Email: casinacasita@gmail.com, Nome: Giada Saguto
+- ID: 18, Email: giuseppe.mazzola75@gmail.com, Nome: Giuseppe Mazzola
+- ID: 19, Email: flavia.arato@gmail.com, Nome: Flavia Arato
+- ID: 20, Email: lucrezia@mannino.it, Nome: Lucrezia Mannino
+- ID: 21, Email: martina.consolo90@gmail.com, Nome: Martina Consolo
+- ID: 22, Email: coworking@neunoi.it, Nome: neunoi

@@ -1,0 +1,2 @@
+full_name,email,password_hash,role:super_admin|admin|socio|host|coworker,roles,saldo_neu,saldo_neu_scadenza,telefono,data_iscrizione:YYYY-MM-DD,note
+neunoi,coworking@neunoi.it,neunoiapp,associazione,"associazione, host",,,,2012-01-27,
