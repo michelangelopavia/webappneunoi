@@ -1,6 +1,6 @@
-const API_URL = import.meta.env.PROD
+const API_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD
     ? window.location.origin
-    : window.location.protocol + '//' + window.location.hostname + ':3000';
+    : window.location.protocol + '//' + window.location.hostname + ':3000');
 
 const getHeaders = () => {
     const token = localStorage.getItem('auth_token');
