@@ -55,6 +55,40 @@ app.get('/api/backup-database-neunoi', (req, res) => {
     }
 });
 
+app.get('/api/run-migration-neunoi', async (req, res) => {
+    try {
+        const { OrdineCoworking } = require('./models');
+        const sequelize = require('./database');
+        const { DataTypes } = require('sequelize');
+
+        console.log('[MIGRATION] Starting migration via URL...');
+        const queryInterface = sequelize.getQueryInterface();
+        const tableInfo = await queryInterface.describeTable('OrdineCoworkings');
+
+        if (!tableInfo.numero_ricevuta) {
+            await queryInterface.addColumn('OrdineCoworkings', 'numero_ricevuta', {
+                type: DataTypes.INTEGER,
+                allowNull: true
+            });
+            console.log('[MIGRATION] Column added.');
+        }
+
+        const orders = await OrdineCoworking.findAll({ order: [['data_ordine', 'ASC']] });
+        const years = {};
+        for (const order of orders) {
+            const year = new Date(order.data_ordine).getFullYear();
+            if (!years[year]) years[year] = 0;
+            years[year]++;
+            await order.update({ numero_ricevuta: years[year] });
+        }
+
+        res.send(`<h1>Migrazione completata!</h1><p>Aggiornati ${orders.length} ordini con la numerazione sequenziale.</p>`);
+    } catch (e) {
+        console.error('[MIGRATION] Error:', e);
+        res.status(500).send(`<h1>Errore durante la migrazione</h1><pre>${e.message}</pre>`);
+    }
+});
+
 app.get('/', (req, res) => {
     res.json({ message: 'Neu Noi Gestione Associazione API' });
 });
