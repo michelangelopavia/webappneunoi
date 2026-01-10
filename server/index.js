@@ -17,16 +17,29 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-const allowedOrigins = ['https://app.neunoi.it', 'http://localhost:5173', 'http://localhost:3000'];
+const allowedOrigins = [
+    'https://app.neunoi.it',
+    'https://neunoi.it',
+    'http://localhost:5173',
+    'http://localhost:3000'
+];
+
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+
+        // Allow any neunoi.it subdomain or railway.app domain
+        const isAllowed = allowedOrigins.indexOf(origin) !== -1 ||
+            origin.includes('neunoi.it') ||
+            origin.includes('railway.app');
+
+        if (isAllowed) {
+            return callback(null, true);
+        } else {
+            console.log('CORS Blocked for origin:', origin);
+            return callback(new Error('CORS not allowed'), false);
         }
-        return callback(null, true);
     },
     credentials: true
 }));
