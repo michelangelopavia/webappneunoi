@@ -150,13 +150,13 @@ export default function RiepilogoAnnuale() {
 
   // Fetch dati
   const { data: transazioni = [] } = useQuery({
-    queryKey: ['transazioni_neu'],
+    queryKey: ['transazioni'],
     queryFn: () => neunoi.entities.TransazioneNEU.list('-data_transazione'),
     initialData: []
   });
 
   const { data: turni = [] } = useQuery({
-    queryKey: ['turni_host'],
+    queryKey: ['turni'],
     queryFn: () => neunoi.entities.TurnoHost.list('-data_inizio'),
     initialData: []
   });
@@ -171,19 +171,19 @@ export default function RiepilogoAnnuale() {
   });
 
   const { data: profili = [] } = useQuery({
-    queryKey: ['profili_coworker'],
+    queryKey: ['profili'],
     queryFn: () => neunoi.entities.ProfiloCoworker.list('-created_date'),
     initialData: []
   });
 
   const { data: ingressi = [] } = useQuery({
-    queryKey: ['ingressi_coworking', calendarYear], // Fixed reference
+    queryKey: ['ingressi'],
     queryFn: () => neunoi.entities.IngressoCoworking.list('-data_ingresso'),
     initialData: []
   });
 
   const { data: abbonamenti = [] } = useQuery({
-    queryKey: ['abbonamenti_riepilogo', calendarYear], // Changed from annoSelezionato
+    queryKey: ['abbonamenti'],
     queryFn: () => neunoi.entities.AbbonamentoUtente.list('-data_inizio'),
     initialData: []
   });
@@ -426,7 +426,7 @@ export default function RiepilogoAnnuale() {
 
   // === STATISTICHE VENDITE (Ordini) ===
   const { data: ordini = [] } = useQuery({
-    queryKey: ['ordini_riepilogo', calendarYear],
+    queryKey: ['ordini'],
     queryFn: () => neunoi.entities.OrdineCoworking.list('-data_ordine'),
     initialData: []
   });

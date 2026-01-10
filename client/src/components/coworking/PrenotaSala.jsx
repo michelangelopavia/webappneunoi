@@ -219,8 +219,8 @@ export default function PrenotaSala({ user, abbonamenti = [] }) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['miei_abbonamenti'] });
-      queryClient.invalidateQueries({ queryKey: ['mie_prenotazioni'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
       setFormData({ sala_id: '', data: '', ora_inizio: '', ora_fine: '', tipo_utilizzo: 'call' });
       setWarnings({ sovrapposizione: false, crediti: null });
       toast.success('Prenotazione confermata!');

@@ -188,13 +188,17 @@ const { sendEmail } = require('../utils/email');
 
 router.post('/send-email', async (req, res) => {
     try {
-        const { to, subject, text, html } = req.body;
+        const { to, subject, text, html, base64_attachments } = req.body;
 
         const info = await sendEmail({
             to,
             subject,
             text,
             html: html || text,
+            attachments: base64_attachments ? base64_attachments.map(a => ({
+                filename: a.filename,
+                content: Buffer.from(a.content, 'base64')
+            })) : []
         });
 
         res.json({ status: 'success', messageId: info.messageId });

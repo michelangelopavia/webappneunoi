@@ -108,6 +108,7 @@ export default function CreaTask({ trigger }) {
           data_inizio: dataInizio.toISOString().split('T')[0],
           data_fine: dataFine.toISOString().split('T')[0],
           priorita: data.priorita,
+          is_collettivo: true,
           stato: 'attivo'
         });
       } else {
@@ -129,9 +130,7 @@ export default function CreaTask({ trigger }) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task_host'] });
-      queryClient.invalidateQueries({ queryKey: ['task_personali'] });
-      queryClient.invalidateQueries({ queryKey: ['notifiche_abbonamenti_archiviate'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
       setOpen(false);
       resetForm();
       toast.success('Task creato con successo');

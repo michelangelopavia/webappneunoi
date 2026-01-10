@@ -5,11 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle, X, ListTodo, CheckCheck, XCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { CheckCircle, X, ListTodo, CheckCheck, XCircle, History } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function TaskPersonali() {
   const [user, setUser] = useState(null);
+  const [abbandonaDialogOpen, setAbbandonaDialogOpen] = useState(false);
+  const [taskDaAbbandonare, setTaskDaAbbandonare] = useState(null);
+  const [motivoAbbandono, setMotivoAbbandono] = useState('');
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -21,20 +27,16 @@ export default function TaskPersonali() {
   }, []);
 
   const { data: tasks = [] } = useQuery({
-    queryKey: ['task_personali', user?.id],
+    queryKey: ['task', 'personali', user?.id],
     queryFn: async () => {
       if (!user) return [];
       const allTasks = await neunoi.entities.TaskNotifica.list('-created_date');
-      console.log('🔍 TUTTI I TASK:', allTasks);
-      console.log('👤 USER:', user);
-      console.log('👤 USER ID:', user.id, 'tipo:', typeof user.id);
 
       const mieiTasks = allTasks.filter(t => {
         const match = String(t.destinatario_id) === String(user.id);
         return match && t.tipo === 'task_manuale';
       });
 
-      console.log('✅ TASK PERSONALI FINALI:', mieiTasks);
       return mieiTasks;
     },
     enabled: !!user,
@@ -42,17 +44,46 @@ export default function TaskPersonali() {
   });
 
   const completaMutation = useMutation({
-    mutationFn: async ({ taskId, stato }) => {
-      await neunoi.entities.TaskNotifica.update(taskId, {
-        stato: stato,
-        completato_da_id: user?.id,
-        completato_da_nome: user?.full_name,
-        data_completamento: new Date().toISOString()
+    mutationFn: async ({ taskId, stato, motivo }) => {
+      const task = tasks.find(t => t.id === taskId);
+      const nuovoStorico = Array.isArray(task.storico) ? [...task.storico] : [];
+
+      nuovoStorico.push({
+        azione: stato,
+        utente_id: user?.id,
+        utente_nome: user?.full_name,
+        data: new Date().toISOString(),
+        note: motivo || ''
       });
+
+      const updateData = {
+        stato: stato,
+        storico: nuovoStorico,
+        motivo_abbandono: motivo || null
+      };
+
+      if (stato === 'completato') {
+        updateData.completato_da_id = user?.id;
+        updateData.completato_da_nome = user?.full_name;
+        updateData.data_completamento = new Date().toISOString();
+      } else if (stato === 'abbandonato') {
+        // Se è collettivo, torna ad essere collettivo
+        if (task.is_collettivo) {
+          updateData.destinatario_tipo = 'collettivo';
+          updateData.destinatario_id = null;
+          updateData.destinatario_nome = 'Tutti i Soci';
+          updateData.stato = 'attivo'; // Torna attivo per gli altri
+        }
+      }
+
+      await neunoi.entities.TaskNotifica.update(taskId, updateData);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task_personali'] });
-      toast.success('Task aggiornato');
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+      setAbbandonaDialogOpen(false);
+      setMotivoAbbandono('');
+      setTaskDaAbbandonare(null);
+      toast.success(variables.stato === 'abbandonato' ? 'Task abbandonato' : 'Task aggiornato');
     }
   });
 
@@ -103,10 +134,32 @@ export default function TaskPersonali() {
             {task.data_completamento && (
               <>
                 <span className="hidden sm:inline">•</span>
-                <span className="whitespace-nowrap text-[#1f7a8c]">Archiviato: {new Date(task.data_completamento).toLocaleDateString('it-IT')}</span>
+                <span className="whitespace-nowrap text-[#1f7a8c]">Completato: {new Date(task.data_completamento).toLocaleDateString('it-IT')}</span>
               </>
             )}
           </div>
+          {task.motivo_abbandono && (
+            <div className="mt-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-100">
+              <strong>Motivo Abbandono:</strong> {task.motivo_abbandono}
+            </div>
+          )}
+
+          {/* Historical Trace */}
+          {task.storico && task.storico.length > 0 && (
+            <div className="mt-3 space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                <History className="w-3 h-3" /> Storico Task
+              </div>
+              {task.storico.map((h, i) => (
+                <div key={i} className="text-[10px] text-slate-500 flex flex-wrap gap-1">
+                  <span className="font-semibold">{new Date(h.data).toLocaleDateString('it-IT')} {new Date(h.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}:</span>
+                  <span className="capitalize">{h.azione.replace('_', ' ')}</span> da
+                  <span className="font-semibold">{h.utente_nome}</span>
+                  {h.note && <span className="italic">"{h.note}"</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {showActions && (
@@ -123,12 +176,15 @@ export default function TaskPersonali() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => completaMutation.mutate({ taskId: task.id, stato: 'abbandonato' })}
+              onClick={() => {
+                setTaskDaAbbandonare(task);
+                setAbbandonaDialogOpen(true);
+              }}
               className="flex-1 sm:flex-none border-red-300 text-red-600 hover:bg-red-50 h-10 sm:h-9"
               title="Abbandona"
             >
               <X className="w-5 h-5 sm:w-4 sm:h-4" />
-              <span className="ml-2 sm:hidden">Rifiuta</span>
+              <span className="ml-2 sm:hidden">Rifiuta / Abbandona</span>
             </Button>
           </div>
         )}
@@ -137,61 +193,107 @@ export default function TaskPersonali() {
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ListTodo className="w-5 h-5 text-[#1f7a8c]" />
-          Task
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="attivi" className="w-full">
-          <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full bg-[#bfdbf7] h-auto p-1 gap-1 sm:gap-0 font-medium">
-            <TabsTrigger value="attivi" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
-              <ListTodo className="w-4 h-4 mr-2 hidden sm:inline" />
-              Attivi ({taskAttivi.length})
-            </TabsTrigger>
-            <TabsTrigger value="completati" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
-              <CheckCheck className="w-4 h-4 mr-2 hidden sm:inline" />
-              Completati ({taskCompletati.length})
-            </TabsTrigger>
-            <TabsTrigger value="abbandonati" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
-              <XCircle className="w-4 h-4 mr-2 hidden sm:inline" />
-              Abbandonati ({taskAbbandonati.length})
-            </TabsTrigger>
-          </TabsList>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ListTodo className="w-5 h-5 text-[#1f7a8c]" />
+            Task
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="attivi" className="w-full">
+            <TabsList className="flex flex-col sm:grid sm:grid-cols-3 w-full bg-[#bfdbf7] h-auto p-1 gap-1 sm:gap-0 font-medium">
+              <TabsTrigger value="attivi" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
+                <ListTodo className="w-4 h-4 mr-2 hidden sm:inline" />
+                Attivi ({taskAttivi.length})
+              </TabsTrigger>
+              <TabsTrigger value="completati" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
+                <CheckCheck className="w-4 h-4 mr-2 hidden sm:inline" />
+                Completati ({taskCompletati.length})
+              </TabsTrigger>
+              <TabsTrigger value="abbandonati" className="flex-1 py-2 text-xs sm:text-sm data-[state=active]:bg-[#053c5e] data-[state=active]:text-white transition-all">
+                <XCircle className="w-4 h-4 mr-2 hidden sm:inline" />
+                Abbandonati ({taskAbbandonati.length})
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="attivi" className="mt-4">
-            <div className="space-y-3">
-              {taskAttivi.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">Nessun task attivo</p>
-              ) : (
-                taskAttivi.map(task => renderTask(task, true))
+            <TabsContent value="attivi" className="mt-4">
+              <div className="space-y-3">
+                {taskAttivi.length === 0 ? (
+                  <p className="text-center text-slate-500 py-8">Nessun task attivo</p>
+                ) : (
+                  taskAttivi.map(task => renderTask(task, true))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="completati" className="mt-4">
+              <div className="space-y-3">
+                {taskCompletati.length === 0 ? (
+                  <p className="text-center text-slate-500 py-8">Nessun task completato</p>
+                ) : (
+                  taskCompletati.map(task => renderTask(task, false))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="abbandonati" className="mt-4">
+              <div className="space-y-3">
+                {taskAbbandonati.length === 0 ? (
+                  <p className="text-center text-slate-500 py-8">Nessun task abbandonato</p>
+                ) : (
+                  taskAbbandonati.map(task => renderTask(task, false))
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <Dialog open={abbandonaDialogOpen} onOpenChange={setAbbandonaDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Abbandona Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Motivo dell'abbandono *</Label>
+              <Textarea
+                placeholder="Spiega brevemente perché non puoi completare questo task..."
+                value={motivoAbbandono}
+                onChange={(e) => setMotivoAbbandono(e.target.value)}
+                className="min-h-[100px]"
+              />
+              {taskDaAbbandonare?.is_collettivo && (
+                <p className="text-xs text-orange-600 font-medium">
+                  Tip: Essendo un task collettivo, tornerà disponibile per gli altri soci.
+                </p>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="completati" className="mt-4">
-            <div className="space-y-3">
-              {taskCompletati.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">Nessun task completato</p>
-              ) : (
-                taskCompletati.map(task => renderTask(task, false))
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="abbandonati" className="mt-4">
-            <div className="space-y-3">
-              {taskAbbandonati.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">Nessun task abbandonato</p>
-              ) : (
-                taskAbbandonati.map(task => renderTask(task, false))
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbbandonaDialogOpen(false)}>Annulla</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (!motivoAbbandono.trim()) {
+                  toast.error('Inserisci un motivo');
+                  return;
+                }
+                completaMutation.mutate({
+                  taskId: taskDaAbbandonare.id,
+                  stato: 'abbandonato',
+                  motivo: motivoAbbandono
+                });
+              }}
+              disabled={completaMutation.isPending}
+            >
+              {completaMutation.isPending ? 'Invio...' : 'Conferma Abbandono'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

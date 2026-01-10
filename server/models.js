@@ -157,18 +157,27 @@ module.exports = {
 
         metodo_pagamento: { type: DataTypes.STRING },
         stato_pagamento: { type: DataTypes.STRING }, // 'pagato', 'non_pagato' (previously 'stato')
+        stato: { type: DataTypes.STRING, defaultValue: 'confermato' }, // 'confermato', 'annullato'
         note: { type: DataTypes.TEXT },
 
-        data_ordine: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+        data_ordine: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+        numero_ricevuta: { type: DataTypes.INTEGER }
     }),
 
     DatiFatturazione: sequelize.define('DatiFatturazione', {
         id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
         user_id: { type: DataTypes.INTEGER },
+        ragione_sociale: { type: DataTypes.STRING },
         indirizzo: { type: DataTypes.STRING },
         citta: { type: DataTypes.STRING },
         cap: { type: DataTypes.STRING },
-        paese: { type: DataTypes.STRING }
+        provincia: { type: DataTypes.STRING },
+        paese: { type: DataTypes.STRING, defaultValue: 'Italia' },
+        partita_iva: { type: DataTypes.STRING },
+        codice_fiscale: { type: DataTypes.STRING },
+        pec: { type: DataTypes.STRING },
+        codice_univoco: { type: DataTypes.STRING },
+        is_estero: { type: DataTypes.BOOLEAN, defaultValue: false }
     }),
 
     TipoAbbonamento: sequelize.define('TipoAbbonamento', {
@@ -202,7 +211,8 @@ module.exports = {
         ingressi_usati: { type: DataTypes.INTEGER, defaultValue: 0 },
         ore_sale_totali: { type: DataTypes.FLOAT, defaultValue: 0 },
         ore_sale_usate: { type: DataTypes.FLOAT, defaultValue: 0 },
-        stato: { type: DataTypes.STRING, defaultValue: 'attivo' },
+        stato: { type: DataTypes.STRING, defaultValue: 'attivo' }, // 'attivo', 'scaduto', 'annullato'
+        riferimento_ordine_id: { type: DataTypes.INTEGER, allowNull: true },
         notifiche_inviate: { type: DataTypes.JSON }, // { scadenza: [7, 3], ingressi: [2], ore: [1] }
         attivo: { type: DataTypes.BOOLEAN, defaultValue: true }
     }),
@@ -263,10 +273,15 @@ module.exports = {
         completato_da_nome: { type: DataTypes.STRING },
         data_completamento: { type: DataTypes.STRING },
         riferimento_abbonamento_id: { type: DataTypes.INTEGER },
+        riferimento_ordine_id: { type: DataTypes.INTEGER },
 
         data_scadenza: { type: DataTypes.DATE },
         assegnatario_id: { type: DataTypes.INTEGER },
-        completato: { type: DataTypes.BOOLEAN, defaultValue: false }
+        completato: { type: DataTypes.BOOLEAN, defaultValue: false },
+
+        motivo_abbandono: { type: DataTypes.TEXT },
+        storico: { type: DataTypes.JSON }, // [{azione: string, utente_id: number, utente_nome: string, data: string, note: string}]
+        is_collettivo: { type: DataTypes.BOOLEAN, defaultValue: false }
     }),
 
     SistemaSetting: sequelize.define('SistemaSetting', {

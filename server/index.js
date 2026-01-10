@@ -46,6 +46,15 @@ app.use('/api/entities', require('./routes/entities'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/coworking', require('./routes/coworking'));
 
+app.get('/api/backup-database-neunoi', (req, res) => {
+    const dbPath = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
+    if (fs.existsSync(dbPath)) {
+        res.download(dbPath, `backup_database_${new Date().toISOString().split('T')[0]}.sqlite`);
+    } else {
+        res.status(404).send('File database non trovato sul server');
+    }
+});
+
 app.get('/', (req, res) => {
     res.json({ message: 'Neu Noi Gestione Associazione API' });
 });

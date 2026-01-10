@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Calendar, CheckCircle, AlertCircle, Trash2, Search, RefreshCw, Download, Mail } from 'lucide-react';
+import { Plus, Calendar, CheckCircle, AlertCircle, Trash2, Search, RefreshCw, Download, Mail, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -50,25 +50,25 @@ export default function GestioneAbbonamenti() {
   });
 
   const { data: profili = [] } = useQuery({
-    queryKey: ['profili_coworker_abbonamenti'],
+    queryKey: ['profili'],
     queryFn: () => neunoi.entities.ProfiloCoworker.list('-created_date'),
     initialData: []
   });
 
   const { data: tipiAbbonamento = [] } = useQuery({
-    queryKey: ['tipi_abbonamento_attivi'],
+    queryKey: ['tipi_abbonamento'],
     queryFn: () => neunoi.entities.TipoAbbonamento.filter({ attivo: true }),
     initialData: []
   });
 
   const { data: abbonamenti = [] } = useQuery({
-    queryKey: ['abbonamenti_tutti'],
+    queryKey: ['abbonamenti'],
     queryFn: () => neunoi.entities.AbbonamentoUtente.list('-data_inizio'),
     initialData: []
   });
 
   const { data: ingressiAbbonamento = [], isLoading: ingressiLoading } = useQuery({
-    queryKey: ['ingressi_abbonamento', selectedAbbonamentoHistory?.id],
+    queryKey: ['ingressi', selectedAbbonamentoHistory?.id],
     queryFn: () => neunoi.entities.IngressoCoworking.filter({
       abbonamento_id: selectedAbbonamentoHistory?.id
     }, '-data_ingresso'),
@@ -77,7 +77,7 @@ export default function GestioneAbbonamenti() {
   });
 
   const { data: profiloOrdini = [], isLoading: ordersLoading } = useQuery({
-    queryKey: ['ordini_profilo', selectedProfileForOrders?.profilo_coworker_id],
+    queryKey: ['ordini', 'profilo', selectedProfileForOrders?.profilo_coworker_id],
     queryFn: () => neunoi.entities.OrdineCoworking.filter({
       profilo_coworker_id: selectedProfileForOrders?.profilo_coworker_id
     }, '-data_ordine'),
@@ -123,7 +123,7 @@ export default function GestioneAbbonamenti() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       setDialogOpen(false);
       setFormData({ profilo_coworker_id: '', tipo_abbonamento_id: '', data_inizio: new Date().toISOString().split('T')[0] });
       toast.success('Abbonamento creato');
@@ -156,8 +156,8 @@ export default function GestioneAbbonamenti() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ingressi_abbonamento'] });
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+      queryClient.invalidateQueries({ queryKey: ['ingressi'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       setEditEntryDialogOpen(false);
       setEntryToEdit(null);
       toast.success('Ingresso aggiornato');
@@ -187,7 +187,8 @@ export default function GestioneAbbonamenti() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['ingressi'] });
       setIngressoDialogOpen(false);
       setSelectedAbbonamento(null);
       setDataIngresso(new Date().toISOString().split('T')[0]);
@@ -198,13 +199,27 @@ export default function GestioneAbbonamenti() {
     }
   });
 
-  const eliminaMutation = useMutation({
-    mutationFn: (abbonamentoId) => neunoi.entities.AbbonamentoUtente.delete(abbonamentoId),
+  const annullaMutation = useMutation({
+    mutationFn: async (abbonamento) => {
+      // 1. Mark subscription as cancelled
+      await neunoi.entities.AbbonamentoUtente.update(abbonamento.id, {
+        stato: 'annullato',
+        attivo: false
+      });
+
+      // 2. If it has a linked order, mark order as cancelled (storno)
+      if (abbonamento.riferimento_ordine_id) {
+        await neunoi.entities.OrdineCoworking.update(abbonamento.riferimento_ordine_id, {
+          stato: 'annullato'
+        });
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['ordini'] });
       setDeleteDialogOpen(false);
       setAbbonamentoDaEliminare(null);
-      toast.success('Abbonamento eliminato');
+      toast.success('Abbonamento annullato (storno registrato)');
     }
   });
 
@@ -256,7 +271,8 @@ export default function GestioneAbbonamenti() {
         ingressi_usati: 0,
         ore_sale_totali: (tipo.ore_sale_incluse || 0) + (tipo.crediti_sala || 0),
         ore_sale_usate: 0,
-        stato: 'attivo'
+        stato: 'attivo',
+        riferimento_ordine_id: ordine.id
       });
 
       // Se non pagato, crea task reminder
@@ -264,12 +280,13 @@ export default function GestioneAbbonamenti() {
         const currentUser = await neunoi.auth.me();
         await neunoi.entities.TaskNotifica.create({
           tipo: 'task_manuale',
-          titolo: `Pagamento rinnovo - ${abbonamento.profilo_nome_completo}`,
+          titolo: `ordine non pagato - effettuare il pagamento! (${abbonamento.profilo_nome_completo})`,
           descrizione: `Rinnovo ${abbonamento.tipo_abbonamento_nome} per un totale di €${tipo.prezzo.toFixed(2)}`,
           creato_da_id: currentUser.id,
           creato_da_nome: currentUser.full_name,
           destinatario_tipo: 'host',
           data_inizio: new Date().toISOString().split('T')[0],
+          riferimento_ordine_id: ordine.id,
           priorita: 'alta',
           stato: 'attivo'
         });
@@ -278,9 +295,9 @@ export default function GestioneAbbonamenti() {
       return ordine;
     },
     onSuccess: (ordine) => {
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
-      queryClient.invalidateQueries({ queryKey: ['ordini_coworking'] });
-      queryClient.invalidateQueries({ queryKey: ['task_notifiche'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['ordini'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
       setRinnovaDialogOpen(false);
       setAbbonamentoDaRinnovare(null);
       setMetodoPagamentoRinnovo('non_pagato');
@@ -295,7 +312,7 @@ export default function GestioneAbbonamenti() {
     }
   });
 
-  const confermaEliminazione = (abbonamento) => {
+  const openAnnullaAbbonamento = (abbonamento) => {
     setAbbonamentoDaEliminare(abbonamento);
     setDeleteDialogOpen(true);
   };
@@ -385,7 +402,18 @@ export default function GestioneAbbonamenti() {
                       <Badge className="bg-[#1f7a8c] text-white">{abb.tipo_abbonamento_nome}</Badge>
                       <Badge className={getStatoColor(abb)}>
                         {(() => {
-                          const giorni = Math.ceil((new Date(abb.data_scadenza) - new Date()) / (1000 * 60 * 60 * 24));
+                          const parseDate = (val) => {
+                            if (!val) return new Date();
+                            if (val instanceof Date) return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+                            const str = val.toString().split('T')[0];
+                            const [y, m, d] = str.split('-').map(Number);
+                            if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+                            return new Date(y, m - 1, d);
+                          };
+                          const scadenza = parseDate(abb.data_scadenza);
+                          const oggi = new Date();
+                          oggi.setHours(0, 0, 0, 0);
+                          const giorni = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
                           return giorni <= 0 ? 'Scaduto' : `${giorni}g`;
                         })()}
                       </Badge>
@@ -458,9 +486,10 @@ export default function GestioneAbbonamenti() {
                       size="sm"
                       variant="outline"
                       className="border-red-300 text-red-600 hover:bg-red-50"
-                      onClick={() => confermaEliminazione(abb)}
+                      onClick={() => openAnnullaAbbonamento(abb)}
+                      title="Annulla Abbonamento (Storno)"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <XCircle className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -513,9 +542,10 @@ export default function GestioneAbbonamenti() {
                         size="sm"
                         variant="outline"
                         className="border-red-300 text-red-600 hover:bg-red-50"
-                        onClick={() => confermaEliminazione(abb)}
+                        onClick={() => openAnnullaAbbonamento(abb)}
+                        title="Annulla Abbonamento (Storno)"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <XCircle className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -529,17 +559,19 @@ export default function GestioneAbbonamenti() {
       < AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Conferma Eliminazione</AlertDialogTitle>
+            <AlertDialogTitle>Conferma Annullamento (Storno)</AlertDialogTitle>
             <AlertDialogDescription>
               {abbonamentoDaEliminare && (
                 <>
-                  Sei sicuro di voler eliminare l'abbonamento di <strong>{abbonamentoDaEliminare.profilo_nome_completo}</strong>?
+                  Sei sicuro di voler annullare l'abbonamento di <strong>{abbonamentoDaEliminare.profilo_nome_completo}</strong>?
                   <br />
                   <span className="text-sm text-slate-600">
                     Tipo: {abbonamentoDaEliminare.tipo_abbonamento_nome}
                   </span>
                   <br />
-                  <span className="text-red-600 font-semibold">Questa azione non può essere annullata.</span>
+                  <span className="text-red-600 font-semibold">
+                    L'abbonamento verrà disattivato e il relativo ordine verrà marcato come ANNULLATO (Storno) nell'archivio ricevute.
+                  </span>
                 </>
               )}
             </AlertDialogDescription>
@@ -547,10 +579,10 @@ export default function GestioneAbbonamenti() {
           <AlertDialogFooter>
             <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => eliminaMutation.mutate(abbonamentoDaEliminare.id)}
+              onClick={() => annullaMutation.mutate(abbonamentoDaEliminare)}
               className="bg-red-600 hover:bg-red-700"
             >
-              Elimina
+              Conferma Annullamento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -40,7 +40,7 @@ export default function MieiNEU() {
   });
 
   const { data: turniHost = [] } = useQuery({
-    queryKey: ['turni_host'],
+    queryKey: ['turni', 'miei'],
     queryFn: () => neunoi.entities.TurnoHost.list('-data_inizio'),
     initialData: []
   });
@@ -108,10 +108,10 @@ export default function MieiNEU() {
     // Carica turni e transazioni
     const tuttiTurni = await neunoi.entities.TurnoHost.list();
     const turniUtente = tuttiTurni
-      .filter((t) => t.utente_id === user.id);
+      .filter((t) => String(t.utente_id) === String(user.id));
 
     const tutteTransazioni = await neunoi.entities.TransazioneNEU.list();
-    const transazioniUtente = tutteTransazioni.filter(t => t.a_utente_id === user.id || t.da_utente_id === user.id);
+    const transazioniUtente = tutteTransazioni.filter(t => String(t.a_utente_id) === String(user.id) || String(t.da_utente_id) === String(user.id));
 
     const oggi = new Date();
     const annoCorrente = oggi.getFullYear();
@@ -182,15 +182,14 @@ export default function MieiNEU() {
     });
 
     // 4. Saldo Finale = (Tutti Guadagni) - (Tutte Spese) - (Cosa è davvero scaduto)
-    const saldoFinale = totalGuadagnato - totalSpese - totalExpiredUnspent;
+    // const saldoFinale = totalGuadagnato - totalSpese - totalExpiredUnspent;
 
     // 5. Saldo in Scadenza Corrente
-    const saldoInScadenza = Math.max(0, unspentInScadenzaCorrente);
+    // const saldoInScadenza = Math.max(0, unspentInScadenzaCorrente);
 
-    await neunoi.entities.User.update(user.id, {
-      saldo_neu: Math.round(saldoFinale * 100) / 100,
-      saldo_neu_scadenza: Math.round(saldoInScadenza * 100) / 100
-    });
+    // NOTA: Il server ora gestisce il calcolo del saldo_neu automaticamente.
+    // Il calcolo locale in questa funzione serve solo per visualizzare lo storico dettagliato e le scadenze.
+    // Non aggiorniamo più il database da qui per evitare inconsistenze.
 
     await loadUser();
   };
@@ -222,13 +221,8 @@ export default function MieiNEU() {
     mutationFn: async (data) => {
       const importo = parseFloat(data.importo);
 
-      if (importo <= 0) {
-        throw new Error('Importo deve essere maggiore di 0');
-      }
-
-      if (importo > (user?.saldo_neu || 0)) {
-        throw new Error('Saldo insufficiente');
-      }
+      if (importo <= 0) throw new Error('Importo deve essere maggiore di 0');
+      if (importo > (user?.saldo_neu || 0)) throw new Error('Saldo insufficiente');
 
       let causaleFinale = data.causale;
       let tipo = 'trasferimento_soci';
@@ -237,39 +231,21 @@ export default function MieiNEU() {
       let emailBody = '';
 
       if (data.tipoDestinatario === 'associazione') {
-        // Trasferimento all'associazione
         tipo = 'pagamento_associazione';
         const motivoLabel = data.motivoAssociazione === 'postazione' ? 'Pagamento postazione coworking' : 'Saldo quota annua';
         causaleFinale = causaleFinale || motivoLabel;
-
         emailSubject = `Pagamento NEU - ${motivoLabel}`;
-        emailBody = `
-          <h2>Pagamento NEU all'Associazione</h2>
-          <p><strong>Da:</strong> ${user.full_name} (${user.email})</p>
-          <p><strong>Motivo:</strong> ${motivoLabel}</p>
-          <p><strong>Importo:</strong> ${importo} NEU</p>
-          <p><strong>Note:</strong> ${data.causale || 'Nessuna nota'}</p>
-          <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
-        `;
+        emailBody = `<h2>Pagamento NEU</h2><p>Da: ${user.full_name}</p><p>Importo: ${importo}</p>`;
       } else {
-        // Trasferimento tra soci
         const destinatario = soci.find((s) => s.email === data.destinatario_email);
-        destinatarioId = destinatario?.id;
-        causaleFinale = causaleFinale || `Trasferimento NEU da ${user.full_name} a ${destinatario?.full_name || 'Socio'}`;
-
+        if (!destinatario) throw new Error('Socio destinatario non trovato');
+        destinatarioId = destinatario.id;
+        causaleFinale = causaleFinale || `Trasferimento NEU da ${user.full_name}`;
         emailSubject = 'Trasferimento NEU tra soci';
-        emailBody = `
-          <h2>Trasferimento NEU</h2>
-          <p><strong>Da:</strong> ${user.full_name} (${user.email})</p>
-          <p><strong>A:</strong> ${destinatario.full_name}</p>
-          <p><strong>Importo:</strong> ${importo} NEU</p>
-          <p><strong>Causale:</strong> ${data.causale || 'Nessuna causale specificata'}</p>
-          <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
-        `;
+        emailBody = `<h2>Trasferimento NEU</h2><p>Da: ${user.full_name}</p><p>A: ${destinatario.full_name}</p><p>Importo: ${importo}</p>`;
       }
 
-      // Crea transazione
-      await neunoi.entities.TransazioneNEU.create({
+      const result = await neunoi.entities.TransazioneNEU.create({
         da_utente_id: user.id,
         a_utente_id: destinatarioId,
         importo: importo,
@@ -278,33 +254,27 @@ export default function MieiNEU() {
         data_transazione: new Date().toISOString()
       });
 
-      // Aggiorna solo il saldo del mittente (l'utente corrente)
-      const currentUserData = await neunoi.auth.me();
-      await neunoi.entities.User.update(user.id, {
-        saldo_neu: Math.round(((currentUserData.saldo_neu || 0) - importo) * 100) / 100
-      });
+      // Background Email
+      neunoi.integrations.Core.SendEmail({
+        to: 'admin@neunoi.it',
+        subject: emailSubject,
+        html: emailBody
+      }).catch(e => console.error('Email error', e));
 
-      // Invia email ai super admin
-      try {
-        await neunoi.integrations.Core.SendEmail({
-          to: 'admin@neunoi.it',
-          subject: emailSubject,
-          body: emailBody
-        });
-      } catch (emailError) {
-        console.error('Errore invio email (non bloccante):', emailError);
-      }
+      return result;
     },
     onSuccess: () => {
+      // Refresh current user and transactions list
       queryClient.invalidateQueries({ queryKey: ['transazioni'] });
+      queryClient.invalidateQueries({ queryKey: ['auth_user'] });
 
-      // Ricalcola il saldo per garantire coerenza immediata (il ricalcolaSaldo già chiama loadUser)
-      ricalcolaSaldo();
+      // Update balance by re-fetching user profile
+      loadUser();
 
-      // Mostra messaggio di successo DENTRO il dialog
+      // Show success in UI
       setTrasferimentoCompletato(true);
 
-      // Chiudi dialog dopo 3 secondi
+      // Reset and close
       setTimeout(() => {
         setDialogOpen(false);
         setTrasferimentoCompletato(false);

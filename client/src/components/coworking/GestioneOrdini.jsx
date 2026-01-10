@@ -14,8 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
-import jsPDF from 'jspdf';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { generateRicevutaPDF } from '@/utils/receiptGenerator';
 
 
 export default function GestioneOrdini() {
@@ -39,19 +39,19 @@ export default function GestioneOrdini() {
 
 
   const { data: profili = [] } = useQuery({
-    queryKey: ['profili_coworker_ordini'],
+    queryKey: ['profili'],
     queryFn: () => neunoi.entities.ProfiloCoworker.list('-created_date'),
     initialData: []
   });
 
   const { data: tipiAbbonamento = [] } = useQuery({
-    queryKey: ['tipi_abbonamento_ordini'],
+    queryKey: ['tipi_abbonamento'],
     queryFn: () => neunoi.entities.TipoAbbonamento.filter({ attivo: true }),
     initialData: []
   });
 
   const { data: ordini = [] } = useQuery({
-    queryKey: ['ordini_coworking'],
+    queryKey: ['ordini', 'tutti'],
     queryFn: () => neunoi.entities.OrdineCoworking.list('-data_ordine'),
     select: (data) => (data || []).map(o => ({
       ...o,
@@ -63,8 +63,8 @@ export default function GestioneOrdini() {
   const eliminaOrdineMutation = useMutation({
     mutationFn: (id) => neunoi.entities.OrdineCoworking.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ordini_coworking'] });
-      queryClient.invalidateQueries({ queryKey: ['admin_tutti_ordini'] });
+      queryClient.invalidateQueries({ queryKey: ['ordini'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       toast.success('Ordine eliminato');
       setDeleteConfirmOpen(false);
       setOrderToDelete(null);
@@ -142,7 +142,8 @@ export default function GestioneOrdini() {
             ingressi_usati: 0,
             ore_sale_totali: tipo.ore_sale_incluse || 0,
             ore_sale_usate: 0,
-            stato: 'attivo'
+            stato: 'attivo',
+            riferimento_ordine_id: ordine.id
           });
         }
       }
@@ -150,8 +151,8 @@ export default function GestioneOrdini() {
       return ordine;
     },
     onSuccess: async (ordine) => {
-      queryClient.invalidateQueries({ queryKey: ['ordini_coworking'] });
-      queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+      queryClient.invalidateQueries({ queryKey: ['ordini'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       setDialogOpen(false);
       resetForm();
       toast.success('Ordine creato con successo');
@@ -162,131 +163,43 @@ export default function GestioneOrdini() {
           const currentUser = await neunoi.auth.me();
           await neunoi.entities.TaskNotifica.create({
             tipo: 'task_manuale',
-            titolo: `Pagamento ordine - ${ordine.profilo_nome_completo}`,
+            titolo: `ordine non pagato - effettuare il pagamento! (${ordine.profilo_nome_completo})`,
             descrizione: `Ordine del ${new Date(ordine.data_ordine || Date.now()).toLocaleDateString('it-IT')} per un totale di €${(ordine.totale || 0).toFixed(2)}. Prodotti: ${Array.isArray(ordine.prodotti) ? ordine.prodotti.map(p => `${p.tipo_abbonamento_nome} x${p.quantita}`).join(', ') : ''}`,
             creato_da_id: currentUser.id,
             creato_da_nome: currentUser.full_name,
             destinatario_tipo: 'host',
             data_inizio: new Date().toISOString().split('T')[0],
+            riferimento_ordine_id: ordine.id,
             priorita: 'alta',
             stato: 'attivo'
           });
-          queryClient.invalidateQueries({ queryKey: ['task_notifiche'] });
+          queryClient.invalidateQueries({ queryKey: ['task'] });
         } catch (error) {
           console.error('Errore creazione task:', error);
         }
       }
 
-      // Genera sempre la ricevuta
+      // Genera sempre la ricevuta (PDF download)
       setTimeout(() => {
-        generaRicevutaPDF(ordine);
+        generateRicevutaPDF(ordine);
       }, 500);
+
+      // Invia automaticamente se pagato
+      if (ordine.stato_pagamento === 'pagato') {
+        try {
+          // Explicitly use the endpoint for sending receipts
+          await neunoi.coworking.sendReceipt(ordine.id);
+          toast.success('Ricevuta inviata via email');
+        } catch (e) {
+          console.error('Errore invio email:', e);
+          toast.info('Ordine creato, ma errore nell\'invio automatico della mail (forse SMTP non configurato)');
+        }
+      }
     },
     onError: (error) => {
       toast.error(error.message || 'Errore durante la creazione dell\'ordine');
     }
   });
-
-  const generaRicevutaPDF = (ordine) => {
-    const doc = new jsPDF();
-
-    // Header
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('neu [nòi]', 20, 20);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('spazio al lavoro APS', 20, 27);
-    doc.text('via Alloro 64, 90133 Palermo', 20, 32);
-
-    // Titolo ricevuta
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RICEVUTA ORDINE', 20, 50);
-
-    // Info ordine
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Data: ${new Date(ordine.data_ordine).toLocaleDateString('it-IT')}`, 20, 60);
-    doc.text(`Cliente: ${ordine.profilo_nome_completo}`, 20, 67);
-    doc.text(`Email: ${ordine.profilo_email}`, 20, 74);
-
-    // Tabella prodotti
-    let y = 90;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Prodotto', 20, y);
-    doc.text('Qtà', 110, y);
-    doc.text('Prezzo', 135, y);
-    doc.text('Totale', 170, y);
-
-    y += 7;
-    doc.line(20, y, 190, y);
-    y += 7;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-
-    if (Array.isArray(ordine.prodotti)) {
-      ordine.prodotti.forEach(prod => {
-        doc.text(prod?.tipo_abbonamento_nome || 'Prodotto', 20, y, { maxWidth: 85 });
-        doc.text((prod?.quantita || 0).toString(), 110, y);
-        doc.text(`€${(prod?.prezzo_unitario || 0).toFixed(2)}`, 135, y);
-        doc.text(`€${(prod?.prezzo_totale || 0).toFixed(2)}`, 170, y);
-        y += 7;
-      });
-    }
-
-    y += 5;
-    doc.line(20, y, 190, y);
-    y += 10;
-
-    // Totale
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TOTALE:', 135, y);
-    doc.text(`€${ordine.totale.toFixed(2)}`, 170, y);
-
-    // Metodo pagamento
-    y += 15;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Metodo di Pagamento: ${getMetodoPagamentoLabel(ordine.metodo_pagamento)}`, 20, y);
-
-    // Note
-    if (ordine.note) {
-      y += 10;
-      doc.text('Note:', 20, y);
-      y += 7;
-      doc.setFontSize(9);
-      const splitNote = doc.splitTextToSize(ordine.note, 170);
-      doc.text(splitNote, 20, y);
-    }
-
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text('neu [nòi] spazio al lavoro APS - via Alloro 64, 90133 Palermo', 105, 280, { align: 'center' });
-
-    // Salva PDF
-    try {
-      const fileName = `Ricevuta_${ordine.profilo_nome_completo.replace(/ /g, '_')}_${ordine.data_ordine}.pdf`;
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success('Ricevuta PDF generata');
-    } catch (error) {
-      console.error('Errore generazione PDF:', error);
-      toast.error('Errore durante il download della ricevuta');
-    }
-  };
 
   const resetForm = () => {
     setOrdineForm({
@@ -352,14 +265,16 @@ export default function GestioneOrdini() {
     }, 0);
   };
 
-  const ordiniFiltrati = ordini.filter(o => {
-    if (!o) return false;
-    const searchLow = (searchTerm || '').toLowerCase();
-    const matchesSearch = !searchTerm ||
-      o.profilo_nome_completo?.toLowerCase().includes(searchLow) ||
-      (Array.isArray(o.prodotti) && o.prodotti.some(p => p?.tipo_abbonamento_nome?.toLowerCase().includes(searchLow)));
-    return matchesSearch;
-  });
+  const ordiniFiltrati = ordini
+    .filter(o => {
+      if (!o) return false;
+      const searchLow = (searchTerm || '').toLowerCase();
+      const matchesSearch = (o.profilo_nome_completo?.toLowerCase().includes(searchLow) ?? false) ||
+        (o.profilo_email?.toLowerCase().includes(searchLow) ?? false) ||
+        (o.id?.toString().includes(searchTerm)); // Added nullish coalescing for o.id
+      return matchesSearch;
+    })
+    .sort((a, b) => (b.id || 0) - (a.id || 0));
 
   return (
     <>
@@ -400,7 +315,9 @@ export default function GestioneOrdini() {
                         month: 'long',
                         year: 'numeric'
                       })}
-                      <span className="ml-2 py-0.5 px-1.5 bg-slate-100 rounded text-[10px] font-mono text-slate-400">#{ordine.id}</span>
+                      <span className="ml-2 py-0.5 px-1.5 bg-slate-100 rounded text-[10px] font-mono text-slate-400">
+                        #{ordine.numero_ricevuta ? `${ordine.numero_ricevuta}/${new Date(ordine.data_ordine).getFullYear()}` : ordine.id}
+                      </span>
                     </div>
                   </div>
                   <div className="text-right">
@@ -411,7 +328,7 @@ export default function GestioneOrdini() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => generaRicevutaPDF(ordine)}
+                        onClick={() => generateRicevutaPDF(ordine)}
                         className="border-[#1f7a8c] text-[#1f7a8c] hover:bg-[#1f7a8c] hover:text-white"
                       >
                         <Download className="w-4 h-4 mr-1" />

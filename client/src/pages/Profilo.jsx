@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { User, Mail, Phone, Calendar, Briefcase, Shield, Edit, Save, X, Lock } from 'lucide-react';
 import DatiAnagrafici from '../components/profilo/DatiAnagrafici';
 import DatiCoworkerProfile from '../components/profilo/DatiCoworkerProfile';
+import ProfiloCoworker from '../components/coworking/ProfiloCoworker'; // Billing Form
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -265,6 +266,9 @@ export default function Profilo() {
           )}
         </CardContent>
       </Card>
+
+      {/* Sezione Dati Fatturazione (Spostata Sotto Informazioni Personali) */}
+      <ProfiloCoworker user={user} />
 
       <Card>
         <CardHeader>

@@ -66,7 +66,7 @@ router.get('/:modelName/list', getModel, async (req, res) => {
 // Supports ?include=all
 router.post('/:modelName/filter', getModel, async (req, res) => {
     try {
-        const { include } = req.query;
+        const { sort, limit, offset, include } = req.query;
         // Helper to parse operators like _like, _gt, etc.
         const parseFilters = (filters) => {
             const newFilters = {};
@@ -90,8 +90,6 @@ router.post('/:modelName/filter', getModel, async (req, res) => {
                             newObj[Op.like] = value[opKey];
                             hasOps = true;
                         } else if (opKey === '_ilike') {
-                            // Postgres only properly, but map to like for generic
-                            // SQLite matches case-insensitive by default for LIKE usually, but Op.like is safer standard
                             newObj[Op.like] = value[opKey];
                             hasOps = true;
                         } else if (opKey === '_gt') {
@@ -119,7 +117,7 @@ router.post('/:modelName/filter', getModel, async (req, res) => {
                     if (hasOps) {
                         newFilters[key] = newObj;
                     } else {
-                        newFilters[key] = parseFilters(value); // Recursive for nested JSON?
+                        newFilters[key] = parseFilters(value);
                     }
                 } else {
                     newFilters[key] = value;
@@ -130,6 +128,15 @@ router.post('/:modelName/filter', getModel, async (req, res) => {
 
         const whereClause = parseFilters(req.body);
         const options = { where: whereClause };
+
+        if (sort) {
+            const desc = sort.startsWith('-');
+            let field = desc ? sort.substring(1) : sort;
+            if (field === 'created_date') field = 'createdAt';
+            options.order = [[field, desc ? 'DESC' : 'ASC']];
+        }
+        if (limit) options.limit = parseInt(limit);
+        if (offset) options.offset = parseInt(offset);
 
         if (include === 'all') {
             options.include = { all: true };
@@ -444,7 +451,7 @@ router.post('/:modelName', getModel, async (req, res) => {
             }
         }
 
-        // SMART MATCH for OrdineCoworking: coworker by email
+        // SMART MATCH for OrdineCoworking: coworker by email and Receipt Numbering
         if (modelName === 'OrdineCoworking') {
             if (!dataToInsert.profilo_coworker_id && (dataToInsert.email || dataToInsert.profilo_email)) {
                 const p = await matchProfiloCoworkerByEmail(dataToInsert.email || dataToInsert.profilo_email);
@@ -455,6 +462,24 @@ router.post('/:modelName', getModel, async (req, res) => {
                     if (!dataToInsert.profilo_email) dataToInsert.profilo_email = p.email;
                 }
             }
+
+            // --- Yearly Receipt Numbering ---
+            const orderDate = dataToInsert.data_ordine ? new Date(dataToInsert.data_ordine) : new Date();
+            const yearStart = new Date(orderDate.getFullYear(), 0, 1);
+            const yearEnd = new Date(orderDate.getFullYear(), 11, 31, 23, 59, 59);
+
+            const lastOrderInYear = await models.OrdineCoworking.findOne({
+                where: {
+                    data_ordine: {
+                        [Op.between]: [yearStart, yearEnd]
+                    }
+                },
+                order: [['numero_ricevuta', 'DESC']]
+            });
+
+            const nextNumber = lastOrderInYear && lastOrderInYear.numero_ricevuta ? lastOrderInYear.numero_ricevuta + 1 : 1;
+            dataToInsert.numero_ricevuta = nextNumber;
+            console.log(`[ORDER] Assigned receipt number ${nextNumber} for year ${orderDate.getFullYear()}`);
         }
 
         // SMART MATCH for TurnoHost: name-based lookup if utente_id is missing
@@ -509,6 +534,37 @@ router.post('/:modelName', getModel, async (req, res) => {
         }
 
         const item = await req.Model.create(dataToInsert);
+
+        // --- AUTOMATIC BALANCE UPDATES ---
+
+        // 1. Update balance for TurnoHost
+        if (modelName === 'TurnoHost' && item.utente_id && item.neu_guadagnati > 0) {
+            const user = await models.User.findByPk(item.utente_id);
+            if (user) {
+                console.log(`[BALANCE ADJ] Adding ${item.neu_guadagnati} NEU to host ${user.id}`);
+                await user.update({ saldo_neu: (user.saldo_neu || 0) + item.neu_guadagnati });
+            }
+        }
+
+        // 2. Update balance for TransazioneNEU (SOCI and PAYMENTS)
+        if (modelName === 'TransazioneNEU' && item.importo > 0) {
+            // Deduct from Sender
+            if (item.da_utente_id) {
+                const sender = await models.User.findByPk(item.da_utente_id);
+                if (sender) {
+                    console.log(`[BALANCE ADJ] Deducting ${item.importo} NEU from sender ${sender.id}`);
+                    await sender.update({ saldo_neu: (sender.saldo_neu || 0) - item.importo });
+                }
+            }
+            // Add to Recipient
+            if (item.a_utente_id) {
+                const recipient = await models.User.findByPk(item.a_utente_id);
+                if (recipient) {
+                    console.log(`[BALANCE ADJ] Adding ${item.importo} NEU to recipient ${recipient.id}`);
+                    await recipient.update({ saldo_neu: (recipient.saldo_neu || 0) + item.importo });
+                }
+            }
+        }
 
         // TRIGGER EMAIL ON CHECK-IN
         if (modelName === 'ProfiloCoworker' || modelName === 'IngressoCoworking') {

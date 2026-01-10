@@ -162,7 +162,7 @@ export default function Volontariato() {
   const dichiarazioniAnnoCorrente = dichiarazioniUtente.filter(d => {
     const dDate = new Date(d.data_dichiarazione || d.createdAt);
     return dDate >= startDate && dDate <= endDate;
-  });
+  }).sort((a, b) => b.id - a.id);
 
   const totaleNeu = dichiarazioniAnnoCorrente.reduce((sum, d) => sum + (d.neu_guadagnati || 0), 0);
   const totaleOre = dichiarazioniAnnoCorrente.reduce((sum, d) => sum + (d.ore || 0), 0);

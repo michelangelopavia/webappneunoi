@@ -195,9 +195,8 @@ export default function ModificaPrenotazione({ open, onOpenChange, prenotazione,
             });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['miei_abbonamenti'] });
-            queryClient.invalidateQueries({ queryKey: ['mie_prenotazioni'] });
-            queryClient.invalidateQueries({ queryKey: ['tutte_prenotazioni_coworker'] });
+            queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+            queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
             toast.success('Prenotazione aggiornata');
             onOpenChange(false);
         },

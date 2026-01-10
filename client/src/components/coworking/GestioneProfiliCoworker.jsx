@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Mail, UserPlus, Users, Trash2 } from 'lucide-react';
+import { Search, Mail, UserPlus, Users, Trash2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -16,7 +16,7 @@ export default function GestioneProfiliCoworker() {
   const queryClient = useQueryClient();
 
   const { data: profili = [] } = useQuery({
-    queryKey: ['profili_coworker'],
+    queryKey: ['profili'],
     queryFn: () => neunoi.entities.ProfiloCoworker.list('-created_date'),
     initialData: []
   });
@@ -48,7 +48,7 @@ via Alloro 64, 90133 Palermo`,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profili_coworker'] });
+      queryClient.invalidateQueries({ queryKey: ['profili'] });
       setInvitoProfiloId(null);
       toast.success('Invito inviato con successo');
     },
@@ -81,15 +81,75 @@ via Alloro 64, 90133 Palermo`,
     (p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   );
 
+  const handleExportCSV = () => {
+    if (profili.length === 0) {
+      toast.info('Nessun profilo da esportare');
+      return;
+    }
+
+    const headers = [
+      'Nome', 'Cognome', 'Email', 'Telefono', 'Genere', 'Data Nascita',
+      'Citta Residenza', 'Paese Residenza', 'Ragione Sociale', 'P.IVA',
+      'Codice Univoco', 'Newsletter', 'Privacy Accettata', 'Data Accettazione Privacy',
+      'Data Compilazione', 'Stato'
+    ];
+
+    const rows = profili.map(p => [
+      p.first_name || '',
+      p.last_name || '',
+      p.email || '',
+      p.telefono || '',
+      p.genere || '',
+      p.data_nascita || '',
+      p.citta_residenza || '',
+      p.paese_residenza || '',
+      p.ragione_sociale || '',
+      p.p_iva || '',
+      p.codice_univoco || '',
+      p.newsletter ? 'SI' : 'NO',
+      p.privacy_accettata ? 'SI' : 'NO',
+      p.data_accettazione_privacy ? new Date(p.data_accettazione_privacy).toLocaleDateString() : '',
+      p.data_compilazione ? new Date(p.data_compilazione).toLocaleDateString() : '',
+      p.stato || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Esportazione_Profili_Coworker_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Esportazione completata');
+  };
+
   return (
     <>
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#1f7a8c]" />
-              Profili Coworker ({profili.length})
-            </CardTitle>
+            <div className="flex items-center gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-[#1f7a8c]" />
+                Profili Coworker ({profili.length})
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCSV}
+                className="border-[#053c5e] text-[#053c5e] hover:bg-[#053c5e] hover:text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Esporta CSV
+              </Button>
+            </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
@@ -156,7 +216,7 @@ via Alloro 64, 90133 Palermo`,
                         onClick={async () => {
                           if (confirm('Sei sicuro di voler eliminare questo profilo?')) {
                             await neunoi.entities.ProfiloCoworker.delete(profilo.id);
-                            queryClient.invalidateQueries({ queryKey: ['profili_coworker'] });
+                            queryClient.invalidateQueries({ queryKey: ['profili'] });
                             toast.success('Profilo eliminato');
                           }
                         }}

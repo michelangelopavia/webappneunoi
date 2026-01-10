@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { neunoi } from '@/api/neunoiClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Calendar, CreditCard, Bell, ClipboardCheck, ShoppingCart } from 'lucide-react';
+import { Calendar, CreditCard, Bell, ClipboardCheck, ShoppingCart, Users } from 'lucide-react';
 import { createPageUrl } from '../utils';
 import GestioneAbbonamenti from '../components/coworking/GestioneAbbonamenti';
 import GestioneOrdini from '../components/coworking/GestioneOrdini';
@@ -14,6 +14,8 @@ import { UserPlus } from 'lucide-react';
 
 import { useQuery } from '@tanstack/react-query';
 import CalendarioTurni from '../components/turni/CalendarioTurni';
+
+import ComunicazioneCoworker from '../components/host/ComunicazioneCoworker';
 
 export default function Host() {
   const [user, setUser] = useState(null);
@@ -48,23 +50,23 @@ export default function Host() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#053c5e] text-white p-8">
-        <div className="flex items-center justify-between">
+      <div className="bg-[#053c5e] text-white p-6 md:p-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold">Postazione Host</h1>
-            <p className="text-lg opacity-90 mt-2">Gestisci notifiche, abbonamenti e calendari delle sale</p>
+            <h1 className="text-3xl md:text-4xl font-bold">Postazione Host</h1>
+            <p className="text-base md:text-lg opacity-90 mt-2">Gestisci notifiche, abbonamenti e calendari delle sale</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <Button
               onClick={() => setRegistraDialogOpen(true)}
-              className="bg-[#db222a] hover:bg-[#1f7a8c] text-white"
+              className="bg-[#db222a] hover:bg-[#1f7a8c] text-white flex-1 md:flex-none"
             >
               <UserPlus className="w-4 h-4 mr-2" />
               Ingresso Carnet
             </Button>
             <Button
               onClick={() => window.location.href = createPageUrl('CheckIn')}
-              className="bg-[#1f7a8c] hover:bg-white hover:text-[#053c5e]"
+              className="bg-[#1f7a8c] hover:bg-white hover:text-[#053c5e] flex-1 md:flex-none"
             >
               <ClipboardCheck className="w-4 h-4 mr-2" />
               Check-in
@@ -75,31 +77,41 @@ export default function Host() {
       </div>
 
       <Tabs defaultValue="notifiche" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-[#bfdbf7]">
-          <TabsTrigger value="notifiche" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <Bell className="w-4 h-4 mr-2" />
-            Notifiche
-          </TabsTrigger>
-          <TabsTrigger value="ordini" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            Acquisti
-          </TabsTrigger>
-          <TabsTrigger value="abbonamenti" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <CreditCard className="w-4 h-4 mr-2" />
-            Abbonamenti
-          </TabsTrigger>
-          <TabsTrigger value="calendario" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <Calendar className="w-4 h-4 mr-2" />
-            Calendario Sale
-          </TabsTrigger>
-          <TabsTrigger value="turni_host" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <Calendar className="w-4 h-4 mr-2" />
-            Calendario Host
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2">
+          <TabsList className="flex w-max min-w-full bg-[#bfdbf7] p-1 h-auto">
+            <TabsTrigger value="notifiche" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <Bell className="w-4 h-4 mr-2" />
+              Notifiche
+            </TabsTrigger>
+            <TabsTrigger value="coworkers" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <Users className="w-4 h-4 mr-2" />
+              Coworkers
+            </TabsTrigger>
+            <TabsTrigger value="ordini" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Acquisti
+            </TabsTrigger>
+            <TabsTrigger value="abbonamenti" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <CreditCard className="w-4 h-4 mr-2" />
+              Abbonamenti
+            </TabsTrigger>
+            <TabsTrigger value="calendario" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <Calendar className="w-4 h-4 mr-2" />
+              Calendario Sale
+            </TabsTrigger>
+            <TabsTrigger value="turni_host" className="flex-1 px-4 py-2 data-[state=active]:bg-[#053c5e] data-[state=active]:text-white whitespace-nowrap">
+              <Calendar className="w-4 h-4 mr-2" />
+              Calendario Host
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="notifiche" className="mt-6">
           <NotificheHost />
+        </TabsContent>
+
+        <TabsContent value="coworkers" className="mt-6">
+          <ComunicazioneCoworker />
         </TabsContent>
 
         <TabsContent value="ordini" className="mt-6">

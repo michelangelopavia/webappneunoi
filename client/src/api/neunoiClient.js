@@ -89,9 +89,18 @@ const createEntityHandler = (entityName) => ({
         return handleResponse(res);
     },
 
-    filter: async (filters, include) => {
+    filter: async (filters, sortOrOptions) => {
         const params = new URLSearchParams();
-        if (include) params.append('include', include);
+        if (typeof sortOrOptions === 'object' && sortOrOptions !== null) {
+            const { sort, limit, offset, include } = sortOrOptions;
+            if (sort) params.append('sort', sort);
+            if (limit) params.append('limit', limit);
+            if (offset) params.append('offset', offset);
+            if (include) params.append('include', include);
+        } else if (typeof sortOrOptions === 'string') {
+            params.append('sort', sortOrOptions);
+        }
+
         const res = await fetch(`${API_URL}/api/entities/${entityName}/filter?${params.toString()}`, {
             method: 'POST',
             headers: getHeaders(),
@@ -220,13 +229,16 @@ export const neunoi = {
 
             // Mocks for other methods if needed
             GenerateImage: async () => ({ url: 'https://placehold.co/600x400' }),
-            SendEmail: async ({ to, subject, text, html }) => {
-                const res = await fetch(`${API_URL}/api/integrations/send-email`, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify({ to, subject, text, html })
-                });
-                return handleResponse(res);
+            SendEmail: async (data) => {
+                // Support both standard to/subject/text and the newer expanded format
+                const payload = {
+                    to: data.to,
+                    subject: data.subject,
+                    text: data.text || data.body || '',
+                    html: data.html || data.body || '',
+                    base64_attachments: data.base64_attachments || []
+                };
+                return neunoi.post('/api/integrations/send-email', payload);
             },
             CreateFileSignedUrl: async () => ({ url: '' }),
             InvokeLLM: async () => ({ output: '' })
@@ -235,12 +247,37 @@ export const neunoi = {
 
     coworking: {
         sendReceipt: async (orderId) => {
-            const res = await fetch(`${API_URL}/api/coworking/orders/${orderId}/send-receipt`, {
-                method: 'POST',
-                headers: getHeaders()
-            });
-            return handleResponse(res);
+            return neunoi.post(`/api/coworking/orders/${orderId}/send-receipt`);
         }
+    },
+
+    // Generic Fetch Helpers
+    get: async (url) => {
+        const res = await fetch(`${API_URL}${url}`, { headers: getHeaders() });
+        return handleResponse(res);
+    },
+    post: async (url, data) => {
+        const res = await fetch(`${API_URL}${url}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: data ? JSON.stringify(data) : undefined
+        });
+        return handleResponse(res);
+    },
+    patch: async (url, data) => {
+        const res = await fetch(`${API_URL}${url}`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: data ? JSON.stringify(data) : undefined
+        });
+        return handleResponse(res);
+    },
+    delete: async (url) => {
+        const res = await fetch(`${API_URL}${url}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        return handleResponse(res);
     }
 };
 

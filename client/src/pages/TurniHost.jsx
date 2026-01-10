@@ -136,9 +136,13 @@ export default function TurniHost() {
       const user = users.find(u => u.email === data.utente_email);
       const utente_id = user?.id;
 
-      // Costruisci datetime ISO 8601 senza timezone (il browser lo gestirà correttamente)
-      const dataInizioISO = `${data.data_inizio}T${data.ora_inizio}:00`;
-      const dataFineISO = `${data.data_fine}T${data.ora_fine}:00`;
+      // Crea oggetto Date in ora locale e converti in ISO (UTC) per il salvataggio
+      // Questo evita che 09:00 locale venga salvato come 09:00 UTC (e quindi visualizzato come 10:00)
+      const dataInizioLocale = new Date(`${data.data_inizio}T${data.ora_inizio}:00`);
+      const dataFineLocale = new Date(`${data.data_fine}T${data.ora_fine}:00`);
+
+      const dataInizioISO = dataInizioLocale.toISOString();
+      const dataFineISO = dataFineLocale.toISOString();
 
       // Calcola NEU con le fasce orarie
       const { oreTotali, neuTotali } = calcolaFasceNEU(dataInizioISO, dataFineISO);
@@ -264,6 +268,7 @@ export default function TurniHost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['turni'] });
+      queryClient.invalidateQueries({ queryKey: ['auth_user'] });
       setDialogOpen(false);
       setEditingTurno(null);
       setFormData({
@@ -342,6 +347,7 @@ export default function TurniHost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['turni'] });
+      queryClient.invalidateQueries({ queryKey: ['auth_user'] });
       setDeletingTurno(null);
     },
   });

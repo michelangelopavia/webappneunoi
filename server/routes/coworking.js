@@ -23,37 +23,24 @@ router.post('/orders/:id/send-receipt', async (req, res) => {
     try {
         const orderId = req.params.id;
         const order = await OrdineCoworking.findByPk(orderId);
+        const { DatiFatturazione } = require('../models');
 
         if (!order) {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        // Fetch user or profile for email address
-        // Order stores profile_email usually
-        let email = order.profilo_email;
-        let profile = null;
-
-        if (order.profilo_coworker_id) {
-            profile = await ProfiloCoworker.findByPk(order.profilo_coworker_id);
-            if (!email && profile) email = profile.email;
-        }
-
-        if (!email && order.user_id) {
-            const user = await User.findByPk(order.user_id);
-            if (user) email = user.email;
-        }
-
-        if (!email) {
-            return res.status(400).json({ error: 'No email found for this order' });
-        }
+        // Fetch billing data
+        const billingData = await DatiFatturazione.findOne({ where: { user_id: order.user_id } });
+        const email = order.profilo_email;
+        const clienteNome = billingData?.ragione_sociale || order.profilo_nome_completo || 'Cliente';
 
         // Generate PDF
         const doc = new PDFDocument();
         let buffers = [];
         doc.on('data', buffers.push.bind(buffers));
 
-        // --- PDF Generation Logic (Mirroring Frontend) ---
-        const pageWidth = 595.28; // A4 point width
+        // --- PDF Generation Logic ---
+        const pageWidth = 595.28;
 
         doc.fontSize(20).fillColor('#053c5e').text('neu [nòi]', 50, 50);
         doc.fontSize(10).fillColor('#646464').text('spazio al lavoro APS', 50, 75);
@@ -61,32 +48,35 @@ router.post('/orders/:id/send-receipt', async (req, res) => {
         doc.text('C.F. 97334130823', 50, 105);
         doc.text('info@neunoi.it', 50, 120);
 
-        doc.fontSize(12).fillColor('black').text(`RICEVUTA #${order.id}`, 0, 50, { align: 'right', width: pageWidth - 50 });
+        const displayId = order.numero_ricevuta ? `${order.numero_ricevuta} / ${new Date(order.data_ordine).getFullYear()}` : order.id;
+        doc.fontSize(12).fillColor('black').text(`RICEVUTA #${displayId}`, 0, 50, { align: 'right', width: pageWidth - 50 });
         doc.fontSize(10).text(`Data: ${new Date(order.data_ordine).toLocaleDateString('it-IT')}`, 0, 70, { align: 'right', width: pageWidth - 50 });
 
+        const isAnnullato = order.stato === 'annullato';
+        const statoLabel = isAnnullato ? 'STORNO / ANNULLATA' : (order.stato_pagamento === 'pagato' ? 'PAGATA' : 'DA PAGARE');
+        const statoColor = isAnnullato ? '#969696' : (order.stato_pagamento === 'pagato' ? '#1f7a8c' : '#db222a');
+
+        doc.fontSize(10).fillColor(statoColor).font('Helvetica-Bold')
+            .text(`STATO: ${statoLabel}`, 0, 85, { align: 'right', width: pageWidth - 50 });
+
         doc.fontSize(11).fillColor('#053c5e').text('Intestato a:', 50, 160);
-        doc.fontSize(10).fillColor('black');
+        doc.fontSize(10).fillColor('black').font('Helvetica');
 
-        let clienteNome = order.profilo_nome_completo || 'Cliente';
-        if (profile) {
-            clienteNome = profile.ragione_sociale ||
-                (profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : order.profilo_nome_completo) ||
-                'Cliente';
-        }
+        if (billingData) {
+            doc.text(billingData.ragione_sociale || order.profilo_nome_completo, 50, 180);
+            let curY = 195;
+            doc.text(billingData.indirizzo, 50, curY); curY += 15;
+            doc.text(`${billingData.cap} ${billingData.citta} ${billingData.provincia ? `(${billingData.provincia})` : ''}`, 50, curY); curY += 15;
+            doc.text(billingData.paese, 50, curY); curY += 15;
 
-        doc.text(clienteNome, 50, 180);
-
-        let yAddr = 195;
-        if (profile) {
-            if (profile.indirizzo) { doc.text(profile.indirizzo, 50, yAddr); yAddr += 15; }
-            if (profile.citta_residenza) {
-                doc.text(`${profile.citta_residenza} ${profile.paese_residenza ? '(' + profile.paese_residenza + ')' : ''}`, 50, yAddr);
-                yAddr += 15;
-            }
-            if (profile.p_iva) { doc.text(`P.IVA: ${profile.p_iva}`, 50, yAddr); yAddr += 15; }
-            if (profile.codice_fiscale) { doc.text(`C.F.: ${profile.codice_fiscale}`, 50, yAddr); yAddr += 15; }
+            if (billingData.partita_iva) { doc.text(`P.IVA / VAT: ${billingData.partita_iva}`, 50, curY); curY += 15; }
+            if (billingData.codice_fiscale) { doc.text(`C.F.: ${billingData.codice_fiscale}`, 50, curY); curY += 15; }
+            if (billingData.codice_univoco) { doc.text(`Codice SDI: ${billingData.codice_univoco}`, 50, curY); curY += 15; }
+            yAddr = curY;
         } else {
-            if (order.profilo_email) { doc.text(`Email: ${order.profilo_email}`, 50, yAddr); yAddr += 15; }
+            doc.text(order.profilo_nome_completo, 50, 180);
+            doc.text(`Email: ${order.profilo_email}`, 50, 195);
+            yAddr = 210;
         }
 
         // Divider
@@ -142,15 +132,15 @@ router.post('/orders/:id/send-receipt', async (req, res) => {
             await transporter.sendMail({
                 from: process.env.SMTP_FROM || '"Neu Noi" <noreply@neunoi.it>',
                 to: email,
-                subject: `Ricevuta Ordine #${order.id} - Neu Noi`,
+                subject: `Ricevuta Ordine #${order.numero_ricevuta || order.id} - Neu Noi`,
                 html: `
                     <p>Gentile ${clienteNome},</p>
-                    <p>In allegato la ricevuta per il tuo ordine #${order.id}.</p>
+                    <p>In allegato la ricevuta per il tuo ordine #${order.numero_ricevuta ? `${order.numero_ricevuta}/${new Date(order.data_ordine).getFullYear()}` : order.id}.</p>
                     <p>Grazie,<br>neu [nòi]</p>
                 `,
                 attachments: [
                     {
-                        filename: `${order.id} - ${new Date(order.data_ordine).toISOString().split('T')[0]} - ${clienteNome.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
+                        filename: `Ricevuta_${order.numero_ricevuta ? `${order.numero_ricevuta}_${new Date(order.data_ordine).getFullYear()}` : order.id}_${clienteNome.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
                         content: pdfData
                     }
                 ]

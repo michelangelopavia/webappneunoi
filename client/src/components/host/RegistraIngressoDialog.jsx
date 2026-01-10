@@ -125,7 +125,7 @@ export default function RegistraIngressoDialog({ open, onOpenChange }) {
             });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['abbonamenti_tutti'] });
+            queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
             toast.success('Ingresso registrato');
             handleClose();
         },

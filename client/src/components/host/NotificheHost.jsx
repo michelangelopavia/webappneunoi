@@ -1,84 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { neunoi } from '@/api/neunoiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bell, CheckCircle, X, AlertTriangle, Calendar, Clock, CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCircle, X, AlertTriangle, Calendar, Clock, CheckCircle2, CreditCard, Save } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 export default function NotificheHost() {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const loadUser = async () => {
-      const currentUser = await neunoi.auth.me();
-      setUser(currentUser);
-    };
-    loadUser();
-  }, []);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [metodoPagamento, setMetodoPagamento] = useState('contanti');
 
   // Carica abbonamenti in scadenza/scaduti
   const { data: abbonamenti = [] } = useQuery({
-    queryKey: ['abbonamenti_notifiche'],
+    queryKey: ['abbonamenti'],
     queryFn: () => neunoi.entities.AbbonamentoUtente.list('-data_scadenza'),
     initialData: []
   });
 
   // Carica task/notifiche manuali per host
   const { data: taskManuali = [] } = useQuery({
-    queryKey: ['task_host'],
+    queryKey: ['task', 'host', 'attivi'],
     queryFn: async () => {
-      const allTasks = await neunoi.entities.TaskNotifica.list('-created_date');
-      console.log('🔍 TUTTI I TASK:', allTasks);
-
-      const taskHost = allTasks.filter(t => {
-        return t.destinatario_tipo === 'host' &&
-          t.stato === 'attivo' &&
-          t.tipo === 'task_manuale';
+      const allTasks = await neunoi.entities.TaskNotifica.filter({
+        destinatario_tipo: 'host',
+        stato: 'attivo',
+        tipo: 'task_manuale'
       });
-
-      console.log('✅ TASK PER HOST FINALI:', taskHost);
-      return taskHost;
+      return allTasks;
     },
     initialData: []
   });
 
-  // Carica notifiche abbonamenti già archiviate
-  const { data: notificheArchiviate = [] } = useQuery({
-    queryKey: ['notifiche_abbonamenti_archiviate'],
+  // Carica TUTTE le notifiche abbonamenti archiviate
+  const { data: notificheAbbonamentiArchiviate = [] } = useQuery({
+    queryKey: ['task', 'abbonamenti', 'archiviati'],
     queryFn: async () => {
-      const tasks = await neunoi.entities.TaskNotifica.filter({
-        tipo: 'abbonamento_scadenza'
+      return await neunoi.entities.TaskNotifica.filter({
+        tipo: { _in: ['abbonamento_scadenza', 'abbonamento_scaduto'] },
+        stato: 'completato'
       });
-      return tasks;
-    },
-    initialData: []
-  });
-
-  const { data: notificheScaduti = [] } = useQuery({
-    queryKey: ['notifiche_abbonamenti_scaduti'],
-    queryFn: async () => {
-      const tasks = await neunoi.entities.TaskNotifica.filter({
-        tipo: 'abbonamento_scaduto'
-      });
-      return tasks;
     },
     initialData: []
   });
 
   // Carica task completati/abbandonati per host
   const { data: taskArchiviati = [] } = useQuery({
-    queryKey: ['task_host_archiviati'],
+    queryKey: ['task', 'host', 'archiviati'],
     queryFn: async () => {
-      const allTasks = await neunoi.entities.TaskNotifica.list('-data_completamento');
-      return allTasks.filter(t =>
-        t.destinatario_tipo === 'host' &&
-        (t.stato === 'completato' || t.stato === 'abbandonato') &&
-        t.tipo === 'task_manuale'
-      );
+      return await neunoi.entities.TaskNotifica.filter({
+        destinatario_tipo: 'host',
+        stato: { _in: ['completato', 'abbandonato'] },
+        tipo: 'task_manuale'
+      });
     },
     initialData: []
   });
@@ -93,10 +76,37 @@ export default function NotificheHost() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task_host'] });
-      queryClient.invalidateQueries({ queryKey: ['task_host_archiviati'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
       toast.success('Task aggiornato');
     }
+  });
+
+  const registraPagamentoMutation = useMutation({
+    mutationFn: async ({ orderId, taskId, metodo }) => {
+      // 1. Update Order
+      await neunoi.entities.OrdineCoworking.update(orderId, {
+        stato_pagamento: 'pagato',
+        metodo_pagamento: metodo
+      });
+
+      // 2. Complete Task
+      await neunoi.entities.TaskNotifica.update(taskId, {
+        stato: 'completato',
+        completato_da_id: user?.id,
+        completato_da_nome: user?.full_name,
+        data_completamento: new Date().toISOString()
+      });
+
+      // 3. Regenerate Receipt (Backend side via sendReceipt which generates and sends)
+      await neunoi.coworking.sendReceipt(orderId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+      queryClient.invalidateQueries({ queryKey: ['ordini'] });
+      setPaymentDialogOpen(false);
+      toast.success('Pagamento registrato e ricevuta inviata');
+    },
+    onError: () => toast.error('Errore durante la registrazione del pagamento')
   });
 
   const archiviaMutation = useMutation({
@@ -105,7 +115,7 @@ export default function NotificheHost() {
         tipo: tipo,
         titolo: `Notifica archiviata`,
         descrizione: `Abbonamento gestito`,
-        riferimento_abbonamento_id: abbonamentoId,
+        riferimento_abbonamento_id: Number(abbonamentoId),
         data_inizio: new Date().toISOString().split('T')[0],
         stato: 'completato',
         completato_da_id: user?.id,
@@ -115,41 +125,57 @@ export default function NotificheHost() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifiche_abbonamenti_archiviate'] });
-      queryClient.invalidateQueries({ queryKey: ['notifiche_abbonamenti_scaduti'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
       toast.success('Notifica archiviata');
+    },
+    onError: (err) => {
+      console.error('❌ Errore durante l\'archiviazione:', err);
+      toast.error('Impossibile archiviare la notifica');
     }
   });
 
   // Genera notifiche automatiche per abbonamenti (escludi quelli già archiviati)
-  const abbonatiArchivatiIds = new Set([
-    ...notificheArchiviate.filter(n => n.stato === 'completato').map(n => n.riferimento_abbonamento_id),
-    ...notificheScaduti.filter(n => n.stato === 'completato').map(n => n.riferimento_abbonamento_id)
-  ]);
+  const abbonatiArchivatiIds = new Set(
+    notificheAbbonamentiArchiviate
+      .filter(n => n.riferimento_abbonamento_id)
+      .map(n => Number(n.riferimento_abbonamento_id))
+  );
+
+  console.log('🔍 IDs Abbonamenti Archiviati:', Array.from(abbonatiArchivatiIds));
 
   const notificheAbbonamenti = abbonamenti
     .filter(abb => {
+      if (!abb.data_scadenza) return false;
+
+      const abbId = Number(abb.id);
+
       // Escludi se già archiviato
-      if (abbonatiArchivatiIds.has(abb.id)) return false;
+      if (abbonatiArchivatiIds.has(abbId)) {
+        console.log(`🚫 Abbonamento ${abbId} già archiviato, lo escludo.`);
+        return false;
+      }
 
       const oggi = new Date();
       const scadenza = new Date(abb.data_scadenza);
       const giorniRimasti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
-      return giorniRimasti <= 7; // Mostra se scade tra 7 giorni o è già scaduto
+
+      // Mostra se scade tra 7 giorni o è scaduto da max 30 giorni
+      return giorniRimasti <= 7 && giorniRimasti >= -30;
     })
     .map(abb => {
       const oggi = new Date();
       const scadenza = new Date(abb.data_scadenza);
       const giorniRimasti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
       const isScaduto = giorniRimasti <= 0;
+      const nomeUtente = abb.profilo_nome_completo || 'Utente sconosciuto';
 
       return {
         id: `abb_${abb.id}`,
         abbonamento_id: abb.id,
         tipo: isScaduto ? 'abbonamento_scaduto' : 'abbonamento_scadenza',
         titolo: isScaduto
-          ? `Abbonamento scaduto - ${abb.utente_nome}`
-          : `Abbonamento in scadenza - ${abb.utente_nome}`,
+          ? `Abbonamento scaduto - ${nomeUtente}`
+          : `Abbonamento in scadenza - ${nomeUtente}`,
         descrizione: isScaduto
           ? `L'abbonamento "${abb.tipo_abbonamento_nome}" è scaduto il ${scadenza.toLocaleDateString('it-IT')}. Contatta l'utente per il rinnovo.`
           : `L'abbonamento "${abb.tipo_abbonamento_nome}" scadrà tra ${giorniRimasti} giorni (${scadenza.toLocaleDateString('it-IT')}).`,
@@ -235,7 +261,21 @@ export default function NotificheHost() {
                       </div>
 
                       <div className="flex items-center gap-2 ml-3">
-                        {notifica.tipo === 'task_manuale' ? (
+                        {notifica.riferimento_ordine_id ? (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedOrderForPayment(notifica.riferimento_ordine_id);
+                              setSelectedTaskId(notifica.id);
+                              setPaymentDialogOpen(true);
+                            }}
+                            className="bg-[#053c5e] hover:bg-[#1f7a8c]"
+                            title="Registra Pagamento"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Paga
+                          </Button>
+                        ) : notifica.tipo === 'task_manuale' ? (
                           <>
                             <Button
                               size="sm"
@@ -319,6 +359,53 @@ export default function NotificheHost() {
           </CardContent>
         </Card>
       )}
+      {/* DIALOG REGISTRA PAGAMENTO */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registra Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <p className="text-sm text-slate-600 mb-1">Stai registrando il pagamento per l'ordine:</p>
+              <p className="font-bold text-[#053c5e]">#{selectedOrderForPayment}</p>
+            </div>
+
+            <div>
+              <Label>Metodo di Pagamento *</Label>
+              <Select value={metodoPagamento} onValueChange={setMetodoPagamento}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="contanti">Contanti</SelectItem>
+                  <SelectItem value="carta">Carta di Credito/Bancomat</SelectItem>
+                  <SelectItem value="bonifico">Bonifico</SelectItem>
+                  <SelectItem value="neu">NEU</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+                Annulla
+              </Button>
+              <Button
+                onClick={() => registraPagamentoMutation.mutate({
+                  orderId: selectedOrderForPayment,
+                  taskId: selectedTaskId,
+                  metodo: metodoPagamento
+                })}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={registraPagamentoMutation.isPending}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Conferma Pagamento
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -20,7 +20,7 @@ export default function TaskCollettivi() {
     }, []);
 
     const { data: tasks = [] } = useQuery({
-        queryKey: ['task_collettivi'],
+        queryKey: ['task', 'collettivi'],
         queryFn: async () => {
             const allTasks = await neunoi.entities.TaskNotifica.list('-created_date');
 
@@ -42,17 +42,25 @@ export default function TaskCollettivi() {
         mutationFn: async (task) => {
             if (!user) return;
 
+            const nuovoStorico = Array.isArray(task.storico) ? [...task.storico] : [];
+            nuovoStorico.push({
+                azione: 'presa_in_carico',
+                utente_id: user.id,
+                utente_nome: user.full_name,
+                data: new Date().toISOString()
+            });
+
             // Update the task to assign it to the current user
             await neunoi.entities.TaskNotifica.update(task.id, {
                 destinatario_tipo: 'socio',
                 destinatario_id: user.id,
                 destinatario_nome: user.full_name,
+                storico: nuovoStorico,
                 stato: 'attivo' // It remains active but now it's personal
             });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['task_collettivi'] });
-            queryClient.invalidateQueries({ queryKey: ['task_personali'] });
+            queryClient.invalidateQueries({ queryKey: ['task'] });
             toast.success('Task preso in carico e spostato nei tuoi task personali');
         },
         onError: (error) => {

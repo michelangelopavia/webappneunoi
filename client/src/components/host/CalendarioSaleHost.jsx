@@ -50,7 +50,7 @@ export default function CalendarioSaleHost() {
   });
 
   const { data: prenotazioni = [] } = useQuery({
-    queryKey: ['prenotazioni_calendario'],
+    queryKey: ['prenotazioni', 'host'],
     queryFn: () => neunoi.entities.PrenotazioneSala.filter({ stato: 'confermata' }),
     initialData: []
   });
@@ -179,7 +179,7 @@ export default function CalendarioSaleHost() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prenotazioni_calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
       setEditDialog(false);
       toast.success('Prenotazione modificata');
     }
@@ -211,7 +211,8 @@ export default function CalendarioSaleHost() {
       await neunoi.entities.PrenotazioneSala.update(id, { stato: 'annullata' });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prenotazioni_calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       toast.success('Prenotazione annullata e crediti rimborsati');
     }
   });
@@ -296,7 +297,8 @@ export default function CalendarioSaleHost() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prenotazioni_calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       setNuovaExpanded(false);
       resetFormNuova();
       toast.success('Prenotazione creata');

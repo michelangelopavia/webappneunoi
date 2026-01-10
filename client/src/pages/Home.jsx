@@ -202,7 +202,7 @@ export default function Home() {
               {isSocio ? (
                 <div className="space-y-4">
                   <p>
-                    Benvenuto nella tua area personale. Qui puoi monitorare il tuo contributo alla comunità,
+                    Questa è la tua area personale. Qui puoi monitorare il tuo contributo alla comunità,
                     gestire i tuoi NEU e dichiarare le tue ore di volontariato.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
@@ -301,7 +301,7 @@ export default function Home() {
               </p>
               <p>
                 <span className="font-semibold text-[#053c5e]">Tel:</span><br />
-                +39 091 1234567
+                +39 091 5739129
               </p>
               <p>
                 <span className="font-semibold text-[#053c5e]">Sede:</span><br />

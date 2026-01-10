@@ -65,7 +65,7 @@ export default function Coworking() {
   const loading = authLoading;
 
   const { data: abbonamenti = [] } = useQuery({
-    queryKey: ['miei_abbonamenti'],
+    queryKey: ['abbonamenti', 'miei'],
     queryFn: async () => {
       const allAbbonamenti = await neunoi.entities.AbbonamentoUtente.filter({
         user_id: user?.id,
@@ -98,16 +98,16 @@ export default function Coworking() {
   });
 
   const { data: prenotazioni = [] } = useQuery({
-    queryKey: ['mie_prenotazioni'],
+    queryKey: ['prenotazioni', 'mie'],
     queryFn: () => neunoi.entities.PrenotazioneSala.filter({
       user_id: user?.id
-    }, '-data_inizio'),
+    }, '-id'),
     enabled: !!user,
     initialData: []
   });
 
   const { data: tuttePrenotazioni = [] } = useQuery({
-    queryKey: ['tutte_prenotazioni_coworker'],
+    queryKey: ['prenotazioni', 'tutte'],
     queryFn: () => neunoi.entities.PrenotazioneSala.filter({ stato: 'confermata' }),
     initialData: []
   });
@@ -121,13 +121,13 @@ export default function Coworking() {
 
   // Fetch Ingressi for history and details
   const { data: ingressi = [] } = useQuery({
-    queryKey: ['miei_ingressi', user?.id, profilo?.id],
+    queryKey: ['ingressi', 'miei'],
     queryFn: () => {
       const conditions = [{ user_id: user.id }];
       if (profilo?.id) conditions.push({ profilo_coworker_id: profilo.id });
       return neunoi.entities.IngressoCoworking.filter({
         _or: conditions
-      }, '-data_ingresso');
+      }, '-id');
     },
     enabled: !!user,
     initialData: []
@@ -135,10 +135,10 @@ export default function Coworking() {
 
   // Fetch Ordini for history
   const { data: ordini = [] } = useQuery({
-    queryKey: ['miei_ordini'],
+    queryKey: ['ordini', 'miei'],
     queryFn: () => neunoi.entities.OrdineCoworking.filter({
       user_id: user?.id
-    }, '-data_ordine'),
+    }, '-id'),
     enabled: !!user,
     initialData: []
   });
@@ -174,9 +174,8 @@ export default function Coworking() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['miei_abbonamenti'] });
-      queryClient.invalidateQueries({ queryKey: ['mie_prenotazioni'] });
-      queryClient.invalidateQueries({ queryKey: ['tutte_prenotazioni_coworker'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['prenotazioni'] });
       toast.success('Prenotazione annullata');
       setDeleteDialogOpen(false);
       setSelectedPrenotazione(null);
@@ -222,8 +221,9 @@ export default function Coworking() {
 
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['miei_abbonamenti'] });
-      queryClient.invalidateQueries({ queryKey: ['miei_ingressi'] });
+      queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['ingressi'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
       setRegistraIngressoOpen(false);
       toast.success('Ingresso registrato con successo');
     },
@@ -294,9 +294,23 @@ export default function Coworking() {
                   {abbonamenti.map((abb) => {
                     const oggi = new Date();
                     oggi.setHours(0, 0, 0, 0);
-                    const inizio = new Date(abb.data_inizio);
-                    inizio.setHours(0, 0, 0, 0);
+
+                    const parseDate = (val) => {
+                      if (!val) return new Date();
+                      // Se è già un oggetto Date, usalo
+                      if (val instanceof Date) return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+                      // Se è una stringa, prendi solo la parte YYYY-MM-DD
+                      const str = val.toString().split('T')[0];
+                      const [y, m, d] = str.split('-').map(Number);
+                      if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+                      return new Date(y, m - 1, d);
+                    };
+
+                    const inizio = parseDate(abb.data_inizio);
+                    const scadenza = parseDate(abb.data_scadenza);
                     const isFuturo = inizio > oggi;
+
+                    const giorniRimanenti = Math.max(0, Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24)));
 
                     return (
                       <div key={abb.id} className={`${isFuturo ? 'bg-orange-50 border-orange-200 border' : 'bg-[#1f7a8c] text-white'} p-4 rounded-none relative`}>
@@ -311,7 +325,7 @@ export default function Coworking() {
                           {isFuturo ? (
                             <span>Inizia il {inizio.toLocaleDateString('it-IT')}</span>
                           ) : (
-                            <span>Scade il {new Date(abb.data_scadenza).toLocaleDateString('it-IT')} ({Math.ceil((new Date(abb.data_scadenza) - oggi) / (1000 * 60 * 60 * 24))} giorni)</span>
+                            <span>Scade il {scadenza.toLocaleDateString('it-IT')} ({giorniRimanenti} {giorniRimanenti === 1 ? 'giorno' : 'giorni'})</span>
                           )}
                           {!isFuturo && <span className="block italic mt-1 text-[10px]">Attivo dal {inizio.toLocaleDateString('it-IT')}</span>}
                         </div>
@@ -387,9 +401,9 @@ export default function Coworking() {
             <Clock className="w-4 h-4 mr-2" />
             Le Mie Prenotazioni
           </TabsTrigger>
-          <TabsTrigger value="profilo" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
-            <CreditCard className="w-4 h-4 mr-2" />
-            Profilo
+          <TabsTrigger value="storico" className="data-[state=active]:bg-[#053c5e] data-[state=active]:text-white">
+            <History className="w-4 h-4 mr-2" />
+            Storico
           </TabsTrigger>
         </TabsList>
 
@@ -495,12 +509,9 @@ export default function Coworking() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="profilo" className="mt-6">
+        <TabsContent value="storico" className="mt-6">
           <div className="space-y-6">
-            <ProfiloCoworker user={user} />
-
-            {/* STORICO COMPLETO */}
-            <div className="mt-8 pt-8 border-t border-slate-200">
+            <div className="pt-2">
               <h3 className="text-2xl font-bold text-[#053c5e] mb-6 flex items-center gap-2">
                 <ShoppingBag className="w-6 h-6" />
                 Storico Attività
@@ -537,7 +548,11 @@ export default function Coworking() {
                                     }
                                   })()}
                                 </div>
-                                <Badge variant="outline" className="mt-1">{ordine.stato_pagamento === 'pagato' ? 'Pagato' : 'Non Pagato'}</Badge>
+                                {ordine.stato === 'annullato' ? (
+                                  <Badge className="bg-red-100 text-red-800 border-red-200 mt-1">Annullato (Storno)</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="mt-1">{ordine.stato_pagamento === 'pagato' ? 'Pagato' : 'Non Pagato'}</Badge>
+                                )}
                               </div>
                               <div className="text-right">
                                 <div className="font-bold">
