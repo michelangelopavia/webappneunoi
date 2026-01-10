@@ -3,5 +3,4 @@ node_modules
 dist
 build
 cp_backup
-server/database.sqlite
-*.sqlite
+
