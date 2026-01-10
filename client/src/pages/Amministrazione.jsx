@@ -241,10 +241,6 @@ export default function Amministrazione() {
         data_transazione: new Date().toISOString(),
         approvata: true
       });
-      const user = users.find(u => u.id === neuForm.utente_id);
-      await neunoi.entities.User.update(neuForm.utente_id, {
-        saldo_neu: Math.round(((user?.saldo_neu || 0) + importo) * 100) / 100
-      });
       await loadUsers();
       queryClient.invalidateQueries({ queryKey: ['all_transazioni'] });
       setNeuForm({ utente_id: '', importo: '', causale: '' });
@@ -297,7 +293,8 @@ export default function Amministrazione() {
       voto_annuale: 'bg-purple-100 text-purple-800',
       trasferimento_soci: 'bg-orange-100 text-orange-800',
       pagamento_associazione: 'bg-red-100 text-red-800',
-      correzione_admin: 'bg-slate-100 text-slate-800'
+      correzione_admin: 'bg-slate-100 text-slate-800',
+      volontariato: 'bg-cyan-100 text-cyan-800'
     };
     return colors[tipo] || 'bg-slate-100 text-slate-800';
   };
@@ -326,31 +323,12 @@ export default function Amministrazione() {
 
   const deleteDichiarazioneMutation = useMutation({
     mutationFn: async (id) => {
-      const dich = dichiarazioni.find(d => d.id === id);
-      if (!dich) return;
-
-      if (dich.neu_guadagnati > 0) {
-        // Revert NEU
-        const user = users.find(u => u.id === dich.user_id);
-        const newBalance = Math.round(((user?.saldo_neu || 0) - dich.neu_guadagnati) * 100) / 100;
-        await neunoi.entities.User.update(dich.user_id, { saldo_neu: newBalance });
-
-        await neunoi.entities.TransazioneNEU.create({
-          da_utente_id: dich.user_id, // User pays back
-          a_utente_id: null,
-          importo: dich.neu_guadagnati,
-          tipo: 'correzione_admin',
-          causale: `Annullamento dichiarazione #${dich.id}`,
-          data_transazione: new Date().toISOString(),
-          approvata: true
-        });
-      }
       await neunoi.entities.DichiarazioneVolontariato.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dichiarazioni_admin'] });
-      loadUsers(); // Refresh balances
-      toast.success('Dichiarazione eliminata e NEU stornati');
+      loadUsers(); // Refresh balances (now handled by server)
+      toast.success('Dichiarazione eliminata e calcoli aggiornati');
     }
   });
 

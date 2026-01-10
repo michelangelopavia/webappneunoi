@@ -55,6 +55,29 @@ app.get('/api/backup-database-neunoi', (req, res) => {
     }
 });
 
+app.get('/api/run-safe-recalc-neunoi', async (req, res) => {
+    try {
+        const { User } = require('./models');
+        const { safeRecalcUser } = require('./utils/safe_recalc');
+
+        console.log('[RECALC] Starting safe balance recalculation...');
+        const users = await User.findAll();
+        const results = [];
+        let count = 0;
+
+        for (const user of users) {
+            const result = await safeRecalcUser(user.id);
+            results.push(result);
+            count++;
+        }
+
+        res.send(`<h1>Ricalcolo Completo</h1><p>Processati ${count} utenti.</p><pre>${JSON.stringify(results, null, 2)}</pre>`);
+    } catch (e) {
+        console.error('[RECALC] Error:', e);
+        res.status(500).send(`<h1>Errore</h1><pre>${e.message}</pre>`);
+    }
+});
+
 app.get('/api/run-migration-neunoi', async (req, res) => {
     try {
         const { OrdineCoworking } = require('./models');

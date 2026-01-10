@@ -61,7 +61,8 @@ const TransazioneNEU = sequelize.define('TransazioneNEU', {
     tipo: { type: DataTypes.STRING }, // turno_host, trasferimento_soci, etc.
     causale: { type: DataTypes.STRING },
     data_transazione: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-    riferimento_turno_id: { type: DataTypes.INTEGER, allowNull: true }
+    riferimento_turno_id: { type: DataTypes.INTEGER, allowNull: true },
+    riferimento_dichiarazione_id: { type: DataTypes.INTEGER, allowNull: true }
 });
 
 // Relationships are defined at the end of the file using module.exports to avoid circular dependencies

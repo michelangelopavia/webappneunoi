@@ -122,9 +122,11 @@ export default function ImportaDati() {
           const cleanRow = {};
           Object.keys(row).forEach(k => {
             if (k && k.trim() !== '') {
-              const val = row[k];
+              let val = row[k];
+              if (typeof val === 'string') val = val.trim();
+
               // Don't send empty strings for ID fields (Sequelize needs null or valid ID)
-              if ((k.endsWith('_id') || k === 'id') && val === '') {
+              if ((k.trim().endsWith('_id') || k.trim() === 'id') && val === '') {
                 cleanRow[k.trim()] = null;
               } else {
                 cleanRow[k.trim()] = val;

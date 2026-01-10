@@ -91,6 +91,8 @@ export default function Volontariato() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dichiarazioni_volontariato'] });
+      queryClient.invalidateQueries({ queryKey: ['transazioni'] });
+      queryClient.invalidateQueries({ queryKey: ['auth_user'] });
       queryClient.invalidateQueries({ queryKey: ['user_me'] });
       setDialogOpen(false);
       setFormData({
@@ -357,7 +359,7 @@ export default function Volontariato() {
               <Textarea
                 value={formData.note}
                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                placeholder="Inserire la data di realizzazione azione"
+                placeholder="Dettagli aggiuntivi..."
                 rows={3}
               />
             </div>

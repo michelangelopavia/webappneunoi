@@ -111,81 +111,7 @@ export default function MieiNEU() {
       .filter((t) => String(t.utente_id) === String(user.id));
 
     const tutteTransazioni = await neunoi.entities.TransazioneNEU.list();
-    const transazioniUtente = tutteTransazioni.filter(t => String(t.a_utente_id) === String(user.id) || String(t.da_utente_id) === String(user.id));
-
-    const oggi = new Date();
-    const annoCorrente = oggi.getFullYear();
-
-    // Configurazione periodi scadenza
-    const inizioPeriodoScadenzaCorrente = new Date(annoCorrente - 1, 9, 1); // 1 ottobre anno-1
-    const finePeriodoScadenzaCorrente = new Date(annoCorrente, 8, 30, 23, 59, 59); // 30 settembre anno corrente
-
-    // 1. Raccogli tutti i guadagni (Turni e Transazioni in entrata)
-    let totalGuadagnato = 0;
-    const earningsByExpiration = [];
-
-    const addEarning = (amount, date) => {
-      if (amount <= 0) return;
-      totalGuadagnato += amount;
-
-      const d = new Date(date);
-      const mese = d.getMonth();
-      const anno = d.getFullYear();
-      const annoScadenza = mese >= 9 ? anno + 1 : anno;
-      const dataScadenza = new Date(annoScadenza, 11, 31, 23, 59, 59);
-
-      earningsByExpiration.push({
-        amount: amount,
-        expiration: dataScadenza,
-        data: d
-      });
-    };
-
-    // Guadagni da turni
-    turniUtente.forEach((t) => {
-      addEarning(t.neu_guadagnati || 0, t.data_inizio);
-    });
-
-    // Guadagni da altre transazioni (es: voto annuale, volontariato, trasferimenti ricevuti)
-    transazioniUtente
-      .filter(t => t.a_utente_id === user.id && t.tipo !== 'turno_host')
-      .forEach(t => {
-        addEarning(t.importo || 0, t.data_transazione);
-      });
-
-    // 2. Calcola Totale Spese
-    let totalSpese = 0;
-    transazioniUtente
-      .filter(t => t.da_utente_id === user.id)
-      .forEach(t => {
-        totalSpese += t.importo || 0;
-      });
-
-    // 3. FIFO Consumption of Earnings by Expenses
-    let remainingExpenses = totalSpese;
-    let totalExpiredUnspent = 0;
-    let unspentInScadenzaCorrente = 0;
-
-    // Ordina per data di scadenza per il FIFO
-    earningsByExpiration.sort((a, b) => a.expiration - b.expiration);
-
-    earningsByExpiration.forEach(e => {
-      const consumed = Math.min(e.amount, remainingExpenses);
-      const unspent = e.amount - consumed;
-      remainingExpenses -= consumed;
-
-      if (e.expiration < oggi) {
-        totalExpiredUnspent += unspent;
-      } else if (e.data >= inizioPeriodoScadenzaCorrente && e.data <= finePeriodoScadenzaCorrente) {
-        unspentInScadenzaCorrente += unspent;
-      }
-    });
-
-    // 4. Saldo Finale = (Tutti Guadagni) - (Tutte Spese) - (Cosa è davvero scaduto)
-    // const saldoFinale = totalGuadagnato - totalSpese - totalExpiredUnspent;
-
-    // 5. Saldo in Scadenza Corrente
-    // const saldoInScadenza = Math.max(0, unspentInScadenzaCorrente);
+    const tutteDichiarazioni = await neunoi.entities.DichiarazioneVolontariato.list();
 
     // NOTA: Il server ora gestisce il calcolo del saldo_neu automaticamente.
     // Il calcolo locale in questa funzione serve solo per visualizzare lo storico dettagliato e le scadenze.
@@ -195,7 +121,7 @@ export default function MieiNEU() {
   };
 
   const transazioniUtente = transazioni
-    .filter((t) => t.a_utente_id === user?.id || t.da_utente_id === user?.id)
+    .filter((t) => String(t.a_utente_id) === String(user?.id) || String(t.da_utente_id) === String(user?.id))
     .filter((t) => {
       // Filtra per tipo
       if (filtroTipo !== 'tutti' && t.tipo !== filtroTipo) return false;
@@ -215,6 +141,11 @@ export default function MieiNEU() {
       }
 
       return true;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.data_transazione || 0);
+      const dateB = new Date(b.data_transazione || 0);
+      return dateB - dateA; // Descending
     });
 
   const trasferisciNEUMutation = useMutation({
@@ -298,7 +229,8 @@ export default function MieiNEU() {
       voto_annuale: 'bg-purple-100 text-purple-800',
       trasferimento_soci: 'bg-orange-100 text-orange-800',
       pagamento_associazione: 'bg-red-100 text-red-800',
-      correzione_admin: 'bg-slate-100 text-slate-800'
+      correzione_admin: 'bg-slate-100 text-slate-800',
+      volontariato: 'bg-cyan-100 text-cyan-800'
     };
     return colors[tipo] || 'bg-slate-100 text-slate-800';
   };
@@ -394,6 +326,7 @@ export default function MieiNEU() {
                   <SelectItem value="voto_annuale">Voti annuali</SelectItem>
                   <SelectItem value="pagamento_associazione">Pagamenti</SelectItem>
                   <SelectItem value="correzione_admin">Correzioni admin</SelectItem>
+                  <SelectItem value="volontariato">Volontariato</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -418,7 +351,7 @@ export default function MieiNEU() {
               </p> :
 
               transazioniUtente.filter((t) => t.tipo !== 'turno_host').map((trans) => {
-                const isEntrata = trans.a_utente_id === user?.id;
+                const isEntrata = String(trans.a_utente_id) === String(user?.id);
 
                 // Determina il nome della controparte
                 let controparte = '';
