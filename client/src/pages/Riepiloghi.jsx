@@ -239,7 +239,10 @@ export default function RiepilogoAnnuale() {
   })).sort((a, b) => b.ore - a.ore);
 
   // === STATISTICHE NEU (Anno Solare) ===
-  const turniAnno = turni.filter(t => new Date(t.data_inizio).getFullYear() === calendarYear);
+  const turniAnno = turni.filter(t =>
+    new Date(t.data_inizio).getFullYear() === calendarYear &&
+    (t.neu_guadagnati > 0)
+  );
 
   const festivita = {
     2024: ['2024-01-01', '2024-01-06', '2024-04-01', '2024-04-25', '2024-05-01', '2024-06-02', '2024-08-15', '2024-11-01', '2024-12-08', '2024-12-25', '2024-12-26'],
@@ -285,13 +288,14 @@ export default function RiepilogoAnnuale() {
 
   const dichiarazioniAnno = dichiarazioni.filter(d => new Date(d.data_dichiarazione).getFullYear() === calendarYear);
   const nVolontariato = dichiarazioniAnno.reduce((sum, d) => sum + (d.neu_guadagnati || 0), 0);
-  const nCompiti = transazioniAnno.filter(t => t.tipo === 'compito_specifico').reduce((sum, t) => sum + (t.importo || 0), 0);
-  const nVoto = transazioniAnno.filter(t => t.tipo === 'voto_annuale').reduce((sum, t) => sum + (t.importo || 0), 0);
+  const nCompiti = transazioniAnno.filter(t => t.tipo === 'compito_specifico' && t.a_utente_id !== null).reduce((sum, t) => sum + (t.importo || 0), 0);
+  const nVoto = transazioniAnno.filter(t => t.tipo === 'voto_annuale' && t.a_utente_id !== null).reduce((sum, t) => sum + (t.importo || 0), 0);
 
   const neuImmessi = nHost + nCompiti + nVolontariato + nVoto;
 
   const transazioniScambio = transazioniAnno.filter(t =>
-    t.tipo === 'trasferimento_soci' || t.tipo === 'pagamento_associazione'
+    (t.tipo === 'trasferimento_soci' || t.tipo === 'pagamento_associazione') &&
+    t.da_utente_id !== null // Esclude i duplicati "Sconosciuto" derivanti da import errati
   );
   const neuScambiati = transazioniScambio.reduce((sum, t) => sum + (t.importo || 0), 0);
 
