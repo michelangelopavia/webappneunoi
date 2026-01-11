@@ -1,0 +1,82 @@
+﻿Checking coincidence between 63 sconosciuti and 63 noti...
+Found 63 matches where amount and day are identical.
+DAY: 2025-01-27, AMOUNT: 100
+  SCON: ID 123 - Acquisto Carnet ingressi
+  NOTO: ID 1 (Alexandra D'Onofrio) - Acquisto Carnet ingressi
+---
+DAY: 2025-10-31, AMOUNT: 88
+  SCON: ID 124 - Saldo quota associativa 2024/25 per ore volontariato mancanti
+  NOTO: ID 2 (Alexandra D'Onofrio) - Saldo quota associativa 2024/25 per ore volontariato mancanti
+---
+DAY: 2025-06-12, AMOUNT: 80
+  SCON: ID 125 - Mensile flex giugno
+  NOTO: ID 3 (Amrita Mishra) - Mensile flex giugno
+---
+DAY: 2025-07-17, AMOUNT: 100
+  SCON: ID 126 - Acquisto Carnet 17/07/2025
+  NOTO: ID 4 (Amrita Mishra) - Acquisto Carnet 17/07/2025
+---
+DAY: 2025-11-10, AMOUNT: 80
+  SCON: ID 127 - Mensile Flex 10/11 - 09/12
+  NOTO: ID 5 (Amrita Mishra) - Mensile Flex 10/11 - 09/12
+---
+DAY: 2025-01-30, AMOUNT: 600
+  SCON: ID 129 - Postazione gen, feb, mar, apr, mag
+  NOTO: ID 7 (Andrea Foschini) - Postazione gen, feb, mar, apr, mag
+---
+DAY: 2025-06-09, AMOUNT: 120
+  SCON: ID 130 - Mensile fissa giugno
+  NOTO: ID 8 (Andrea Foschini) - Mensile fissa giugno
+---
+DAY: 2025-08-06, AMOUNT: 120
+  SCON: ID 131 - Mensile fissa agosto
+  NOTO: ID 9 (Andrea Foschini) - Mensile fissa agosto
+---
+DAY: 2025-10-31, AMOUNT: 42
+  SCON: ID 132 - Saldo quota associativa 2024/25 per ore volontariato mancanti
+  NOTO: ID 10 (Andrea Foschini) - Saldo quota associativa 2024/25 per ore volontariato mancanti
+---
+DAY: 2025-11-07, AMOUNT: 120
+  SCON: ID 133 - Mensile fissa novembre 2025
+  NOTO: ID 11 (Andrea Foschini) - Mensile fissa novembre 2025
+---
+DAY: 2025-12-10, AMOUNT: 120
+  SCON: ID 134 - Mensile fissa dicembre 2025
+  NOTO: ID 12 (Andrea Foschini) - Mensile fissa dicembre 2025
+---
+DAY: 2025-12-17, AMOUNT: 2
+  SCON: ID 135 - Stampe
+  NOTO: ID 13 (Andrea Foschini) - Stampe
+---
+DAY: 2025-02-18, AMOUNT: 120
+  SCON: ID 138 - Postazione fissa febbraio (condivisa con Michi)
+  NOTO: ID 16 (Barbara Moavero) - Postazione fissa febbraio (condivisa con Michi)
+---
+DAY: 2025-08-28, AMOUNT: 120
+  SCON: ID 139 - Postazione fissa novembre 2024
+  NOTO: ID 17 (Barbara Moavero) - Postazione fissa novembre 2024
+---
+DAY: 2025-11-07, AMOUNT: 76
+  SCON: ID 140 - Saldo quota associativa 2024/25 per ore volontariato mancanti
+  NOTO: ID 18 (Barbara Moavero) - Saldo quota associativa 2024/25 per ore volontariato mancanti
+---
+DAY: 2025-03-14, AMOUNT: 48
+  SCON: ID 141 - Uso sala per aperitivo Coaching Mediterraneo 06 marzo 2025
+  NOTO: ID 19 (Beppe Castellucci) - Uso sala per aperitivo Coaching Mediterraneo 06 marzo 2025
+---
+DAY: 2025-04-22, AMOUNT: 71
+  SCON: ID 142 - 1 ora sala basic il 2 aprile 2025 + 3 ore sala business l'11 aprile 2025 + due mezze giornate flex (17 e 18 aprile 2025)
+  NOTO: ID 20 (Beppe Castellucci) - 1 ora sala basic il 2 aprile 2025 + 3 ore sala business l'11 aprile 2025 + due mezze giornate flex (17 e 18 aprile 2025)
+---
+DAY: 2025-07-18, AMOUNT: 75
+  SCON: ID 143 - 5 ore di sala business fra l'8 e il 9 luglio 2025
+  NOTO: ID 21 (Beppe Castellucci) - 5 ore di sala business fra l'8 e il 9 luglio 2025
+---
+DAY: 2025-07-18, AMOUNT: 8
+  SCON: ID 144 - Mezza giornata in data 18 luglio 2025
+  NOTO: ID 22 (Beppe Castellucci) - Mezza giornata in data 18 luglio 2025
+---
+DAY: 2025-09-19, AMOUNT: 30
+  SCON: ID 145 - 2 ore sala Business il 16 settembre
+  NOTO: ID 23 (Beppe Castellucci) - 2 ore sala Business il 16 settembre
+---

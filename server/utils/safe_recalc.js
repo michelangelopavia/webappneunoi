@@ -5,6 +5,8 @@ async function safeRecalcUser(userId) {
     const user = await models.User.findByPk(userId);
     if (!user) return null;
 
+    const now = new Date();
+
     // 1. GATHER DATA
     const hostEarns = await models.TurnoHost.findAll({ where: { utente_id: userId } });
     const volRecords = await models.DichiarazioneVolontariato.findAll({ where: { user_id: userId } });
@@ -26,103 +28,81 @@ async function safeRecalcUser(userId) {
         const startDate = new Date(startYear, 9, 1, 0, 0, 0); // Oct 1st
         const endDate = new Date(startYear + 1, 8, 30, 23, 59, 59); // Sept 30th
 
-        return { startDate, endDate };
+        return { startYear, startDate, endDate };
     };
 
-    const { startDate, endDate } = getAssociativeYearRange();
+    const currentAssoc = getAssociativeYearRange(now);
     const totalHoursYear = volRecords
         .filter(d => {
             const dDate = new Date(d.data_dichiarazione || d.createdAt);
-            return d.confermato && dDate >= startDate && dDate <= endDate;
+            return d.confermato && dDate >= currentAssoc.startDate && dDate <= currentAssoc.endDate;
         })
         .reduce((sum, d) => sum + (d.ore || 0), 0);
 
-    // 2. DEFINE BUCKETS
-    // Bucket Ancient: Pre-Oct 2024
-    // Bucket A: Oct 1, 2024 -> Sep 30, 2025 (Expires Dec 31, 2025)
-    // Bucket B: Oct 1, 2025 -> Sep 30, 2026 (Expires Dec 31, 2026)
+    // 2. DEFINE DYNAMIC BUCKETS
+    // Rule: Earnings in Assoc Year X/X+1 expire on Dec 31, X+1.
+    // We group all earnings by their Expiry Date.
 
-    let bucketAncient = 0;
-    let bucketA = 0;
-    let bucketB = 0;
+    const earningsByExpiry = {}; // { 'YYYY-MM-DD': amount }
 
-    // Dates (Adjusted for Italy Timezone UTC+2/UTC+1)
-    const startA = new Date('2024-09-30T20:00:00Z');
-    const splitDate = new Date('2025-09-30T20:00:00Z');
-    const expiryA = new Date('2025-12-31T23:59:59Z');
+    const addEarningToBucket = (amount, dateStr) => {
+        if (!amount || amount <= 0) return;
+        const d = new Date(dateStr);
+        const assoc = getAssociativeYearRange(d);
+        // Expiry is Dec 31 of (startYear + 1)
+        const expiryDate = new Date(assoc.startYear + 1, 11, 31, 23, 59, 59);
+        const expiryKey = expiryDate.toISOString().split('T')[0];
 
-    // Helper to Add Earnings
-    const addEarning = (amount, dateStr) => {
-        const d = new Date(dateStr || Date.now());
-        const val = amount || 0;
-
-        if (d < startA) {
-            bucketAncient += val;
-        } else if (d < splitDate) {
-            bucketA += val;
-        } else {
-            bucketB += val;
-        }
+        earningsByExpiry[expiryKey] = (earningsByExpiry[expiryKey] || 0) + amount;
     };
 
-    // Debug Aggregates
-    let totalHostEarned = 0;
-    let totalVolEarned = 0;
-    let totalTransEarned = 0;
+    hostEarns.forEach(e => addEarningToBucket(e.neu_guadagnati, e.data_inizio || e.createdAt));
+    volRecords.forEach(e => addEarningToBucket(e.neu_guadagnati, e.data_dichiarazione || e.createdAt));
+    transEarns.forEach(e => addEarningToBucket(e.importo, e.data_transazione || e.createdAt));
 
-    hostEarns.forEach(e => {
-        addEarning(e.neu_guadagnati, e.data_inizio || e.createdAt);
-        totalHostEarned += (e.neu_guadagnati || 0);
-    });
-    volRecords.forEach(e => {
-        addEarning(e.neu_guadagnati, e.data_dichiarazione || e.createdAt);
-        totalVolEarned += (e.neu_guadagnati || 0);
-    });
-    transEarns.forEach(e => {
-        addEarning(e.importo, e.data_transazione || e.createdAt);
-        totalTransEarned += (e.importo || 0);
-    });
-
-    const initialBucketA = bucketA;
-    const initialBucketB = bucketB;
-    const initialBucketAncient = bucketAncient;
-
-    // 3. PROCESS SPENDS SIMULATION
+    // 3. PROCESS SPENDS SIMULATION (FIFO by Expiry)
     const sortedSpends = transSpends.sort((a, b) => new Date(a.data_transazione) - new Date(b.data_transazione));
-
-    let totalSpent = 0;
+    const sortedExpiryKeys = Object.keys(earningsByExpiry).sort(); // Ascending dates
 
     for (const spend of sortedSpends) {
-        const date = new Date(spend.data_transazione);
-        let amount = spend.importo || 0;
-        totalSpent += amount;
+        const spendDate = new Date(spend.data_transazione);
+        let amountToSpend = spend.importo || 0;
 
-        const isAValid = date <= expiryA;
+        for (const expiryKey of sortedExpiryKeys) {
+            if (amountToSpend <= 0) break;
 
-        const fromAncient = Math.min(amount, bucketAncient);
-        bucketAncient -= fromAncient;
-        amount -= fromAncient;
-
-        if (isAValid) {
-            const fromA = Math.min(amount, bucketA);
-            bucketA -= fromA;
-            amount -= fromA;
+            const expiryDate = new Date(expiryKey);
+            // Can only spend from this bucket if it wasn't expired at spend time
+            if (spendDate <= expiryDate) {
+                const available = earningsByExpiry[expiryKey];
+                const take = Math.min(amountToSpend, available);
+                earningsByExpiry[expiryKey] -= take;
+                amountToSpend -= take;
+            }
         }
-
-        const fromB = Math.min(amount, bucketB);
-        bucketB -= fromB;
-        amount -= fromB;
     }
 
-    // 4. FINAL RESULTS
-    const now = new Date();
-    const isAfterExpiryA = now > expiryA;
+    // 4. CALCULATE FINAL BALANCES
+    let totalBalance = 0;
+    let nextExpiryAmount = 0;
+    let nextExpiryDate = null;
 
-    const finalScadenza = Math.round(bucketB * 100) / 100;
+    // Filter out already expired buckets relative to "NOW"
+    const aliveBuckets = sortedExpiryKeys
+        .filter(key => new Date(key) >= now)
+        .map(key => ({ date: key, amount: earningsByExpiry[key] }));
 
-    const finalTotal = isAfterExpiryA
-        ? finalScadenza
-        : Math.round((bucketAncient + bucketA + bucketB) * 100) / 100;
+    aliveBuckets.forEach(b => {
+        totalBalance += b.amount;
+    });
+
+    if (aliveBuckets.length > 0) {
+        nextExpiryAmount = aliveBuckets[0].amount;
+        nextExpiryDate = aliveBuckets[0].date;
+    }
+
+    const finalTotal = Math.round(totalBalance * 100) / 100;
+    const finalScadenza = Math.round(nextExpiryAmount * 100) / 100;
 
     await user.update({
         saldo_neu: finalTotal,
@@ -133,23 +113,10 @@ async function safeRecalcUser(userId) {
     return {
         id: userId,
         full_name: user.full_name,
-        email: user.email,
         saldo_neu: finalTotal,
         saldo_neu_scadenza: finalScadenza,
-        ore_volontariato_anno: totalHoursYear,
-        debug: {
-            initialBucketAncient,
-            initialBucketA,
-            initialBucketB,
-            remainingBucketAncient: bucketAncient,
-            remainingBucketA: bucketA,
-            remainingBucketB: bucketB,
-            totalSpent,
-            isAfterExpiryA,
-            totalHostEarned,
-            totalVolEarned,
-            totalTransEarned
-        }
+        prossima_scadenza: nextExpiryDate,
+        ore_volontariato_anno: totalHoursYear
     };
 }
 

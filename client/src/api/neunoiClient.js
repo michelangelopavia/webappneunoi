@@ -181,7 +181,16 @@ export const neunoi = {
     },
 
     entities: {
-        User: createEntityHandler('User'),
+        User: {
+            ...createEntityHandler('User'),
+            recalc: async (id) => {
+                const res = await fetch(`${API_URL}/api/users/${id}/recalc`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                return handleResponse(res);
+            }
+        },
         TurnoHost: createEntityHandler('TurnoHost'),
         ProfiloSocio: createEntityHandler('ProfiloSocio'),
         TransazioneNEU: createEntityHandler('TransazioneNEU'),

@@ -1,0 +1,51 @@
+﻿--- SCONOSCIUTO TRANSACTIONS 2025 (63 total) ---
+ID: 123, Importo: 100, Data: Mon Jan 27 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Acquisto Carnet ingressi
+ID: 124, Importo: 88, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 125, Importo: 80, Data: Thu Jun 12 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mensile flex giugno
+ID: 126, Importo: 100, Data: Thu Jul 17 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Acquisto Carnet 17/07/2025
+ID: 127, Importo: 80, Data: Mon Nov 10 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Mensile Flex 10/11 - 09/12
+ID: 129, Importo: 600, Data: Thu Jan 30 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Postazione gen, feb, mar, apr, mag
+ID: 130, Importo: 120, Data: Mon Jun 09 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mensile fissa giugno
+ID: 131, Importo: 120, Data: Wed Aug 06 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mensile fissa agosto
+ID: 132, Importo: 42, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 133, Importo: 120, Data: Fri Nov 07 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Mensile fissa novembre 2025
+ID: 134, Importo: 120, Data: Wed Dec 10 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Mensile fissa dicembre 2025
+ID: 135, Importo: 2, Data: Wed Dec 17 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Stampe
+ID: 138, Importo: 120, Data: Tue Feb 18 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Postazione fissa febbraio (condivisa con Michi)
+ID: 139, Importo: 120, Data: Thu Aug 28 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Postazione fissa novembre 2024
+ID: 140, Importo: 76, Data: Fri Nov 07 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 141, Importo: 48, Data: Fri Mar 14 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Uso sala per aperitivo Coaching Mediterraneo 06 marzo 2025
+ID: 142, Importo: 71, Data: Tue Apr 22 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: 1 ora sala basic il 2 aprile 2025 + 3 ore sala business l'11 aprile 2025 + due mezze giornate flex (17 e 18 aprile 2025)
+ID: 143, Importo: 75, Data: Fri Jul 18 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: 5 ore di sala business fra l'8 e il 9 luglio 2025
+ID: 144, Importo: 8, Data: Fri Jul 18 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mezza giornata in data 18 luglio 2025
+ID: 145, Importo: 30, Data: Fri Sep 19 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: 2 ore sala Business il 16 settembre
+ID: 146, Importo: 224, Data: Thu Oct 16 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: 2 postazioni fisse Rewild Sicily ottobre
+ID: 147, Importo: 15, Data: Mon Nov 10 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: 1 ora sala business 10 nov 2025
+ID: 148, Importo: 470, Data: Wed Dec 24 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: 5 mesi di postazione flex (15 feb - 15 lug) e 1 spazio eventi per 2 ore
+ID: 149, Importo: 96, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 150, Importo: 58, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 151, Importo: 100, Data: Tue Jun 03 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Carnet 20 ingressi del 3 giugno
+ID: 152, Importo: 100, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 153, Importo: 200, Data: Fri Dec 19 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: 2 carnet accessi
+ID: 154, Importo: 112, Data: Sun Nov 23 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 155, Importo: 68, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 157, Importo: 800, Data: Thu Jul 17 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Postazione flex per tutto il 2025
+ID: 158, Importo: 100, Data: Wed Dec 24 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: 1 carnet accessi
+ID: 159, Importo: 120, Data: Sun Nov 23 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 162, Importo: 240, Data: Fri Mar 07 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Mensile fissa febbraio e marzo
+ID: 164, Importo: 240, Data: Sat May 10 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mensile fissa aprile e maggio
+ID: 165, Importo: 240, Data: Fri Jul 11 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Mensile fissa giugno e luglio
+ID: 166, Importo: 240, Data: Thu Aug 28 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Postazione fissa luglio e agosto
+ID: 167, Importo: 14, Data: Wed Sep 03 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Offerta sala riunioni a Martin
+ID: 168, Importo: 240, Data: Tue Sep 09 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Postazione fissa settembre e ottobre
+ID: 169, Importo: 80, Data: Mon Sep 15 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Postazione flex settembre (Eleonora)
+ID: 170, Importo: 8, Data: Wed Oct 15 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Offerta mezza giornata Varto
+ID: 171, Importo: 360, Data: Tue Oct 21 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: 3 mesi postazione fissa
+ID: 175, Importo: 80, Data: Sun Dec 28 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Mensile flex dal 22 gennaio 2026
+ID: 188, Importo: 120, Data: Fri Nov 07 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 191, Importo: 80, Data: Sat Dec 13 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Carnet sala basic per Serena Bella
+ID: 192, Importo: 160, Data: Wed Dec 24 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: 1 carnet accessi e 2 carnet sala riunioni
+ID: 193, Importo: 100, Data: Mon May 26 2025 02:00:00 GMT+0200 (Ora legale dellÔÇÖEuropa centrale), Causale: Pagamento carnet 20 mezze giornata maggio 2025
+ID: 194, Importo: 78, Data: Fri Oct 31 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+ID: 195, Importo: 100, Data: Wed Nov 19 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Acquisto Carnet 19 novembre
+ID: 196, Importo: 400, Data: Sun Dec 28 2025 01:00:00 GMT+0100 (Ora standard dellÔÇÖEuropa centrale), Causale: Acquisto postazione flex per 5 mesi dal 15 febbraio 2026

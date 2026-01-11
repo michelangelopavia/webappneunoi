@@ -68,11 +68,23 @@ app.get('/api/backup-database-neunoi', (req, res) => {
     }
 });
 
+app.post('/api/users/:id/recalc', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { safeRecalcUser } = require('./utils/safe_recalc');
+        const result = await safeRecalcUser(id);
+        if (!result) return res.status(404).json({ error: 'User not found' });
+        res.json(result);
+    } catch (e) {
+        console.error('[RECALC-USER] Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/run-safe-recalc-neunoi', async (req, res) => {
     try {
         const { User } = require('./models');
         const { safeRecalcUser } = require('./utils/safe_recalc');
-
         console.log('[RECALC] Starting safe balance recalculation...');
         const users = await User.findAll();
         const results = [];

@@ -348,6 +348,12 @@ export default function Amministrazione() {
             <h1 className="text-4xl font-bold">Amministrazione</h1>
             <p className="text-lg opacity-90 mt-2">Gestisci utenti, NEU e volontariato</p>
           </div>
+          <Link to={createPageUrl('RiepilogoSoci')}>
+            <Button className="bg-[#1f7a8c] hover:bg-white hover:text-[#1f7a8c] border-2 border-[#1f7a8c] transition-colors font-bold">
+              <Users className="w-5 h-5 mr-2" />
+              Riepilogo Soci
+            </Button>
+          </Link>
           {(currentUser?.roles?.includes('super_admin') || currentUser?.role === 'super_admin') && (
             <Link to={createPageUrl('ImportaDati')}>
               <Button className="bg-[#db222a] hover:bg-white hover:text-[#db222a] border-2 border-[#db222a] transition-colors font-bold">

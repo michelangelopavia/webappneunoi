@@ -1,0 +1,21 @@
+﻿--- ANALYSIS OF 2025 PAYMENTS (Total: 126) ---
+
+Top 10 Users by Payment:
+Sconosciuto: 8398 NEU (63 transazioni)
+Michelangelo Pavia: 1742 NEU (10 transazioni)
+Andrea Foschini: 1124 NEU (7 transazioni)
+Beppe Castellucci: 941 NEU (8 transazioni)
+Luisa Tuttolomondo: 900 NEU (2 transazioni)
+Riccardo Buccheri: 678 NEU (4 transazioni)
+Simone Di Giovanni: 592 NEU (5 transazioni)
+Rosa Guagliardo: 443 NEU (8 transazioni)
+Giada Saguto: 400 NEU (3 transazioni)
+Rafaela Pascoal: 360 NEU (3 transazioni)
+
+--- Probabili Duplicati (Stesso Giorno, Stesso Importo, Stesso Socio) ---
+Trovati 3 sospetti duplicati.
+SocioID: null, Importo: 120, Giorno: 2025-11-07, Causale: Saldo quota associativa 2024/25 per ore volontariato mancanti
+SocioID: null, Importo: 120, Giorno: 2025-11-07, Causale: Postazione fissa novembre 2025
+SocioID: null, Importo: 120, Giorno: 2025-12-10, Causale: Postazione fissa dicembre
+
+Turni effettuati da coworking@neunoi.it: 45

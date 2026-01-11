@@ -202,68 +202,10 @@ export default function TurniHost() {
             data_transazione: dataInizioISO,
             riferimento_turno_id: turno.id
           });
+
+          // Trigger centralized server-side recalculation
+          await neunoi.entities.User.recalc(utente_id);
         }
-      }
-
-      // Ricalcola saldo totale e saldo in scadenza (solo se non è Associazione)
-      if (!isAssociazione) {
-        // Carica tutti i dati necessari per un ricalcolo robusto
-        const tuttiTurni = await neunoi.entities.TurnoHost.list();
-        const turniUtente = tuttiTurni
-          .filter((t) => String(t.utente_id) === String(utente_id))
-          .sort((a, b) => new Date(a.data_inizio) - new Date(b.data_inizio));
-
-        const tutteTransazioni = await neunoi.entities.TransazioneNEU.list();
-        const transazioniUtente = tutteTransazioni.filter(t => String(t.a_utente_id) === String(utente_id) || String(t.da_utente_id) === String(utente_id));
-
-        const oggi = new Date();
-        const annoCorrente = oggi.getFullYear();
-
-        const inizioPeriodoScadenzaCorrente = new Date(annoCorrente - 1, 9, 1);
-        const finePeriodoScadenzaCorrente = new Date(annoCorrente, 8, 30, 23, 59, 59);
-
-        let totalGuadagnato = 0;
-        const earningsByExpiration = [];
-
-        const addEarning = (amount, date) => {
-          if (amount <= 0) return;
-          totalGuadagnato += amount;
-          const d = new Date(date);
-          const mese = d.getMonth();
-          const anno = d.getFullYear();
-          const annoScadenza = mese >= 9 ? anno + 1 : anno;
-          const dataScadenza = new Date(annoScadenza, 11, 31, 23, 59, 59);
-          earningsByExpiration.push({ amount: amount, expiration: dataScadenza, data: d });
-        };
-
-        turniUtente.forEach((t) => addEarning(t.neu_guadagnati, t.data_inizio));
-        transazioniUtente
-          .filter(t => String(t.a_utente_id) === String(utente_id) && t.tipo !== 'turno_host')
-          .forEach(t => addEarning(t.importo, t.data_transazione));
-
-        let totalSpese = 0;
-        transazioniUtente.filter(t => String(t.da_utente_id) === String(utente_id)).forEach(t => {
-          totalSpese += t.importo || 0;
-        });
-
-        let remainingExpenses = totalSpese;
-        let totalExpiredUnspent = 0;
-        let unspentInScadenzaCorrente = 0;
-
-        earningsByExpiration.forEach(e => {
-          const consumed = Math.min(e.amount, remainingExpenses);
-          const unspent = e.amount - consumed;
-          remainingExpenses -= consumed;
-          if (e.expiration < oggi) totalExpiredUnspent += unspent;
-          else if (e.data >= inizioPeriodoScadenzaCorrente && e.data <= finePeriodoScadenzaCorrente) unspentInScadenzaCorrente += unspent;
-        });
-
-        const saldoFinale = totalGuadagnato - totalSpese - totalExpiredUnspent;
-
-        await neunoi.entities.User.update(utente_id, {
-          saldo_neu: Math.round(saldoFinale * 100) / 100,
-          saldo_neu_scadenza: Math.round(Math.max(0, unspentInScadenzaCorrente) * 100) / 100
-        });
       }
     },
     onSuccess: () => {
@@ -287,63 +229,10 @@ export default function TurniHost() {
     mutationFn: async (turno) => {
       await neunoi.entities.TurnoHost.delete(turno.id);
 
-      // Ricalcola saldo totale e saldo in scadenza
-      const tuttiTurni = await neunoi.entities.TurnoHost.list();
-      const turniUtente = tuttiTurni
-        .filter((t) => t.utente_id === turno.utente_id)
-        .sort((a, b) => new Date(a.data_inizio) - new Date(b.data_inizio));
-
-      const tutteTransazioni = await neunoi.entities.TransazioneNEU.list();
-      const transazioniUtente = tutteTransazioni.filter(t => t.a_utente_id === turno.utente_id || t.da_utente_id === turno.utente_id);
-
-      const oggi = new Date();
-      const annoCorrente = oggi.getFullYear();
-
-      const inizioPeriodoScadenzaCorrente = new Date(annoCorrente - 1, 9, 1);
-      const finePeriodoScadenzaCorrente = new Date(annoCorrente, 8, 30, 23, 59, 59);
-
-      let totalGuadagnato = 0;
-      const earningsByExpiration = [];
-
-      const addEarning = (amount, date) => {
-        if (amount <= 0) return;
-        totalGuadagnato += amount;
-        const d = new Date(date);
-        const mese = d.getMonth();
-        const anno = d.getFullYear();
-        const annoScadenza = mese >= 9 ? anno + 1 : anno;
-        const dataScadenza = new Date(annoScadenza, 11, 31, 23, 59, 59);
-        earningsByExpiration.push({ amount: amount, expiration: dataScadenza, data: d });
-      };
-
-      turniUtente.forEach((t) => addEarning(t.neu_guadagnati, t.data_inizio));
-      transazioniUtente
-        .filter(t => t.a_utente_id === turno.utente_id && t.tipo !== 'turno_host')
-        .forEach(t => addEarning(t.importo, t.data_transazione));
-
-      let totalSpese = 0;
-      transazioniUtente.filter(t => t.da_utente_id === turno.utente_id).forEach(t => {
-        totalSpese += t.importo || 0;
-      });
-
-      let remainingExpenses = totalSpese;
-      let totalExpiredUnspent = 0;
-      let unspentInScadenzaCorrente = 0;
-
-      earningsByExpiration.forEach(e => {
-        const consumed = Math.min(e.amount, remainingExpenses);
-        const unspent = e.amount - consumed;
-        remainingExpenses -= consumed;
-        if (e.expiration < oggi) totalExpiredUnspent += unspent;
-        else if (e.data >= inizioPeriodoScadenzaCorrente && e.data <= finePeriodoScadenzaCorrente) unspentInScadenzaCorrente += unspent;
-      });
-
-      const saldoFinale = totalGuadagnato - totalSpese - totalExpiredUnspent;
-
-      await neunoi.entities.User.update(turno.utente_id, {
-        saldo_neu: Math.round(saldoFinale * 100) / 100,
-        saldo_neu_scadenza: Math.round(Math.max(0, unspentInScadenzaCorrente) * 100) / 100
-      });
+      // Trigger centralized server-side recalculation
+      if (turno.utente_id) {
+        await neunoi.entities.User.recalc(turno.utente_id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['turni'] });

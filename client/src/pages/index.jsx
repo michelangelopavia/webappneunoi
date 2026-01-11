@@ -21,6 +21,7 @@ import MieiTask from "./MieiTask";
 import Profilo from "./Profilo";
 
 import Riepiloghi from "./Riepiloghi";
+import RiepilogoSoci from "./RiepilogoSoci";
 
 import TurniHost from "./TurniHost";
 
@@ -55,6 +56,7 @@ const PAGES = {
     Profilo: Profilo,
 
     Riepiloghi: Riepiloghi,
+    RiepilogoSoci: RiepilogoSoci,
 
     TurniHost: TurniHost,
 
@@ -111,6 +113,7 @@ function PagesContent() {
                 <Route path="/Profilo" element={<Profilo />} />
 
                 <Route path="/Riepiloghi" element={<Riepiloghi />} />
+                <Route path="/RiepilogoSoci" element={<RiepilogoSoci />} />
 
                 <Route path="/TurniHost" element={<TurniHost />} />
 
