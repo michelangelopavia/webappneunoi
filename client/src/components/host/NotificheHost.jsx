@@ -53,14 +53,20 @@ export default function NotificheHost() {
     initialData: []
   });
 
+  // Carica ordini non pagati
+  const { data: ordiniNonPagati = [] } = useQuery({
+    queryKey: ['ordini', 'non_pagati'],
+    queryFn: () => neunoi.entities.OrdineCoworking.filter({ stato_pagamento: 'non_pagato' }),
+    initialData: []
+  });
+
   // Carica task completati/abbandonati per host
   const { data: taskArchiviati = [] } = useQuery({
     queryKey: ['task', 'host', 'archiviati'],
     queryFn: async () => {
       return await neunoi.entities.TaskNotifica.filter({
         destinatario_tipo: 'host',
-        stato: { _in: ['completato', 'abbandonato'] },
-        tipo: 'task_manuale'
+        stato: { _in: ['completato', 'abbandonato'] }
       });
     },
     initialData: []
@@ -89,13 +95,24 @@ export default function NotificheHost() {
         metodo_pagamento: metodo
       });
 
-      // 2. Complete Task
-      await neunoi.entities.TaskNotifica.update(taskId, {
-        stato: 'completato',
-        completato_da_id: user?.id,
-        completato_da_nome: user?.full_name,
-        data_completamento: new Date().toISOString()
-      });
+      // 2. Complete/Archive Task
+      if (typeof taskId === 'string') {
+        if (taskId.startsWith('abb_')) {
+          const abbId = taskId.replace('abb_', '');
+          await archiviaMutation.mutateAsync({ abbonamentoId: abbId, tipo: 'pagamento_registrato' });
+        } else if (taskId.startsWith('ord_')) {
+          const ordId = taskId.replace('ord_', '');
+          await archiviaMutation.mutateAsync({ ordineId: ordId, tipo: 'pagamento_registrato' });
+        }
+      } else if (taskId) {
+        // It's a real TaskNotifica ID (manual task)
+        await neunoi.entities.TaskNotifica.update(taskId, {
+          stato: 'completato',
+          completato_da_id: user?.id,
+          completato_da_nome: user?.full_name,
+          data_completamento: new Date().toISOString()
+        });
+      }
 
       // 3. Regenerate Receipt (Backend side via sendReceipt which generates and sends)
       await neunoi.coworking.sendReceipt(orderId);
@@ -110,12 +127,13 @@ export default function NotificheHost() {
   });
 
   const archiviaMutation = useMutation({
-    mutationFn: async ({ abbonamentoId, tipo }) => {
+    mutationFn: async ({ abbonamentoId, ordineId, tipo }) => {
       await neunoi.entities.TaskNotifica.create({
         tipo: tipo,
         titolo: `Notifica archiviata`,
-        descrizione: `Abbonamento gestito`,
-        riferimento_abbonamento_id: Number(abbonamentoId),
+        descrizione: ordineId ? `Pagamento ordine #${ordineId} gestito` : `Abbonamento gestito`,
+        riferimento_abbonamento_id: abbonamentoId ? Number(abbonamentoId) : null,
+        riferimento_ordine_id: ordineId ? Number(ordineId) : null,
         data_inizio: new Date().toISOString().split('T')[0],
         stato: 'completato',
         completato_da_id: user?.id,
@@ -135,51 +153,66 @@ export default function NotificheHost() {
   });
 
   // Genera notifiche automatiche per abbonamenti (escludi quelli già archiviati)
-  const abbonatiArchivatiIds = new Set(
-    notificheAbbonamentiArchiviate
-      .filter(n => n.riferimento_abbonamento_id)
-      .map(n => Number(n.riferimento_abbonamento_id))
+  const taskArchiviatiIds = new Set(
+    taskArchiviati
+      .filter(n => n.riferimento_abbonamento_id || n.riferimento_ordine_id)
+      .map(n => n.riferimento_abbonamento_id ? `abb_${n.riferimento_abbonamento_id}` : `ord_${n.riferimento_ordine_id}`)
   );
 
-  console.log('🔍 IDs Abbonamenti Archiviati:', Array.from(abbonatiArchivatiIds));
+  // 1. Notifiche Ordini Non Pagati
+  const notifichePagamenti = ordiniNonPagati
+    .filter(ord => !taskArchiviatiIds.has(`ord_${ord.id}`))
+    .map(ord => ({
+      id: `ord_${ord.id}`,
+      riferimento_ordine_id: ord.id,
+      tipo: 'pagamento_mancante',
+      titolo: `Pagamento Mancante - ${ord.profilo_nome_completo || 'Socio'}`,
+      descrizione: `L'ordine #${ord.id} di ${ord.totale}€ risuona come "Non Pagato".`,
+      priorita: 'alta',
+      data: new Date(ord.data_ordine)
+    }));
 
-  const notificheAbbonamenti = abbonamenti
+  // 2, 3, 4. Notifiche Abbonamenti (Esaustione e Scadenza Perpetua)
+  const notificheServizi = abbonamenti
     .filter(abb => {
-      if (!abb.data_scadenza) return false;
-
-      const abbId = Number(abb.id);
-
-      // Escludi se già archiviato
-      if (abbonatiArchivatiIds.has(abbId)) {
-        console.log(`🚫 Abbonamento ${abbId} già archiviato, lo escludo.`);
-        return false;
-      }
+      const abbKey = `abb_${abb.id}`;
+      if (taskArchiviatiIds.has(abbKey)) return false;
 
       const oggi = new Date();
+      const inizio = new Date(abb.data_inizio);
       const scadenza = new Date(abb.data_scadenza);
-      const giorniRimasti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+      const durataGiorni = Math.round((scadenza - inizio) / (1000 * 60 * 60 * 24));
 
-      // Mostra se scade tra 7 giorni o è scaduto da max 30 giorni
-      return giorniRimasti <= 7 && giorniRimasti >= -30;
+      const ingressiFiniti = abb.ingressi_totali > 0 && abb.ingressi_usati >= abb.ingressi_totali;
+      const oreSaleFinite = abb.ore_sale_totali > 0 && abb.ore_sale_usate >= abb.ore_sale_totali;
+      const tempoScaduto = oggi > scadenza && durataGiorni >= 7;
+
+      return ingressiFiniti || oreSaleFinite || tempoScaduto;
     })
     .map(abb => {
       const oggi = new Date();
+      const inizio = new Date(abb.data_inizio);
       const scadenza = new Date(abb.data_scadenza);
-      const giorniRimasti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
-      const isScaduto = giorniRimasti <= 0;
-      const nomeUtente = abb.profilo_nome_completo || 'Utente sconosciuto';
+      const durataGiorni = Math.round((scadenza - inizio) / (1000 * 60 * 60 * 24));
+
+      const ingressiFiniti = abb.ingressi_totali > 0 && abb.ingressi_usati >= abb.ingressi_totali;
+      const oreSaleFinite = abb.ore_sale_totali > 0 && abb.ore_sale_usate >= abb.ore_sale_totali;
+      const tempoScaduto = oggi > scadenza && durataGiorni >= 7;
+
+      let ragioni = [];
+      if (ingressiFiniti) ragioni.push("ingressi esauriti");
+      if (oreSaleFinite) ragioni.push("ore sale esaurite");
+      if (tempoScaduto) ragioni.push("tempo scaduto");
+
+      const nomeUtente = abb.profilo_nome_completo || 'Socio';
 
       return {
         id: `abb_${abb.id}`,
         abbonamento_id: abb.id,
-        tipo: isScaduto ? 'abbonamento_scaduto' : 'abbonamento_scadenza',
-        titolo: isScaduto
-          ? `Abbonamento scaduto - ${nomeUtente}`
-          : `Abbonamento in scadenza - ${nomeUtente}`,
-        descrizione: isScaduto
-          ? `L'abbonamento "${abb.tipo_abbonamento_nome}" è scaduto il ${scadenza.toLocaleDateString('it-IT')}. Contatta l'utente per il rinnovo.`
-          : `L'abbonamento "${abb.tipo_abbonamento_nome}" scadrà tra ${giorniRimasti} giorni (${scadenza.toLocaleDateString('it-IT')}).`,
-        priorita: isScaduto ? 'alta' : giorniRimasti <= 3 ? 'media' : 'bassa',
+        tipo: 'servizio_finito',
+        titolo: `Servizio Concluso - ${nomeUtente}`,
+        descrizione: `L'abbonamento "${abb.tipo_abbonamento_nome}" è terminato per: ${ragioni.join(', ')}.`,
+        priorita: 'media',
         data: scadenza,
         abbonamento: abb
       };
@@ -195,12 +228,12 @@ export default function NotificheHost() {
   };
 
   const getTipoIcon = (tipo) => {
-    if (tipo === 'abbonamento_scaduto') return <AlertTriangle className="w-5 h-5 text-red-600" />;
-    if (tipo === 'abbonamento_scadenza') return <Clock className="w-5 h-5 text-orange-600" />;
+    if (tipo === 'pagamento_mancante') return <CreditCard className="w-5 h-5 text-red-600" />;
+    if (tipo === 'servizio_finito') return <AlertTriangle className="w-5 h-5 text-orange-600" />;
     return <Bell className="w-5 h-5 text-[#1f7a8c]" />;
   };
 
-  const tutteNotifiche = [...notificheAbbonamenti, ...taskManuali].sort((a, b) => {
+  const tutteNotifiche = [...notifichePagamenti, ...notificheServizi, ...taskManuali].sort((a, b) => {
     const prioritaOrder = { alta: 3, media: 2, bassa: 1 };
     return (prioritaOrder[b.priorita] || 0) - (prioritaOrder[a.priorita] || 0);
   });
@@ -262,37 +295,52 @@ export default function NotificheHost() {
 
                       <div className="flex items-center gap-2 ml-3">
                         {notifica.riferimento_ordine_id ? (
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOrderForPayment(notifica.riferimento_ordine_id);
-                              setSelectedTaskId(notifica.id);
-                              setPaymentDialogOpen(true);
-                            }}
-                            className="bg-[#053c5e] hover:bg-[#1f7a8c]"
-                            title="Registra Pagamento"
-                          >
-                            <CreditCard className="w-4 h-4 mr-2" />
-                            Paga
-                          </Button>
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedOrderForPayment(notifica.riferimento_ordine_id);
+                                setSelectedTaskId(notifica.id);
+                                setPaymentDialogOpen(true);
+                              }}
+                              className="bg-[#053c5e] hover:bg-[#1f7a8c] h-8"
+                              title="Registra Pagamento"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 mr-1" />
+                              Paga
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => archiviaMutation.mutate({
+                                ordineId: notifica.riferimento_ordine_id,
+                                tipo: notifica.tipo
+                              })}
+                              className="h-8 border-green-200 text-green-700 hover:bg-green-50"
+                              title="Segna come gestito"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                              OK
+                            </Button>
+                          </div>
                         ) : notifica.tipo === 'task_manuale' ? (
-                          <>
+                          <div className="flex flex-col gap-1">
                             <Button
                               size="sm"
                               onClick={() => completaMutation.mutate({ taskId: notifica.id, stato: 'completato' })}
-                              className="bg-green-600 hover:bg-green-700"
+                              className="bg-green-600 hover:bg-green-700 h-8"
                             >
-                              <CheckCircle className="w-4 h-4" />
+                              <CheckCircle className="w-3.5 h-3.5" />
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => completaMutation.mutate({ taskId: notifica.id, stato: 'abbandonato' })}
-                              className="border-red-300 text-red-600 hover:bg-red-50"
+                              className="h-8 border-red-200 text-red-600 hover:bg-red-50"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-3.5 h-3.5" />
                             </Button>
-                          </>
+                          </div>
                         ) : (
                           <Button
                             size="sm"
@@ -303,7 +351,8 @@ export default function NotificheHost() {
                             className="bg-green-600 hover:bg-green-700"
                             title="Segna come gestito"
                           >
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Gestita
                           </Button>
                         )}
                       </div>
