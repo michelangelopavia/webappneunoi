@@ -451,11 +451,11 @@ export default function Coworking() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {prenotazioni.filter((p) => p.stato !== 'annullata' && new Date(p.data_inizio) > new Date()).length === 0 ?
-                  <p className="text-center text-slate-500 py-8">Nessuna prenotazione futura</p> :
+                {prenotazioni.filter((p) => p.stato !== 'annullata' && new Date(p.data_fine) > new Date()).length === 0 ?
+                  <p className="text-center text-slate-500 py-8">Nessuna prenotazione attiva o futura</p> :
 
                   prenotazioni.
-                    filter((p) => p.stato !== 'annullata' && new Date(p.data_inizio) > new Date()).
+                    filter((p) => p.stato !== 'annullata' && new Date(p.data_fine) > new Date()).
                     map((pren) =>
                       <div key={pren.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
                         <div className="flex-1">
@@ -611,9 +611,9 @@ export default function Coworking() {
                 <TabsContent value="storico_prenotazioni" className="mt-4">
                   <Card>
                     <CardContent className="pt-6">
-                      {prenotazioni.filter(p => new Date(p.data_inizio) < new Date() || p.stato === 'annullata').length === 0 ? <p className="text-center text-slate-500">Nessuna prenotazione passata</p> :
+                      {prenotazioni.filter(p => new Date(p.data_fine) < new Date() || p.stato === 'annullata').length === 0 ? <p className="text-center text-slate-500">Nessuna prenotazione passata</p> :
                         <div className="space-y-4">
-                          {prenotazioni.filter(p => new Date(p.data_inizio) < new Date() || p.stato === 'annullata').map(pren => (
+                          {prenotazioni.filter(p => new Date(p.data_fine) < new Date() || p.stato === 'annullata').map(pren => (
                             <div key={pren.id} className="flex justify-between items-center border-b border-slate-100 pb-4 last:border-0 last:pb-0">
                               <div>
                                 <div className="font-bold text-slate-700">{pren.sala_nome}</div>

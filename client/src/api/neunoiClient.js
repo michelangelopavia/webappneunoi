@@ -224,6 +224,14 @@ export const neunoi = {
             });
             return handleResponse(res);
         },
+        adminTriggerReset: async (userId) => {
+            const res = await fetchWithTimeout(`${API_URL}/auth/admin-trigger-reset`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ userId })
+            }, 45000);
+            return handleResponse(res);
+        },
         isAuthenticated: async () => {
             const token = localStorage.getItem('auth_token');
             return !!token;

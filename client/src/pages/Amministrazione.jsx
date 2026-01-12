@@ -333,6 +333,27 @@ export default function Amministrazione() {
     }
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id) => await neunoi.entities.User.delete(id),
+    onSuccess: () => {
+      loadUsers();
+      toast.success('Utente eliminato!');
+    },
+    onError: (err) => {
+      toast.error('Errore durante l\'eliminazione: ' + err.message);
+    }
+  });
+
+  const triggerResetMutation = useMutation({
+    mutationFn: async (userId) => await neunoi.auth.adminTriggerReset(userId),
+    onSuccess: (res) => {
+      toast.success(res.message || '✅ Email di reset inviata!');
+    },
+    onError: (err) => {
+      toast.error('Errore invio email: ' + err.message);
+    }
+  });
+
   if (loading) return <div className="text-center py-12">Caricamento...</div>;
 
   const neuPerAzione = (Array.isArray(dichiarazioni) ? dichiarazioni : []).reduce((acc, d) => {
@@ -436,12 +457,48 @@ export default function Amministrazione() {
             <CardContent>
               <div className="space-y-2">
                 {filteredUsers.map(user => (
-                  <div key={user.id} className="flex justify-between items-center p-4 border rounded-lg">
-                    <div>
-                      <div className="font-bold">{user.full_name}</div>
-                      <div className="text-sm text-slate-500">{user.email}</div>
+                  <div key={user.id} className="flex justify-between items-center p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+                    <div className="flex gap-4 items-center">
+                      <div className="w-10 h-10 rounded-full bg-[#bfdbf7] flex items-center justify-center font-bold text-[#053c5e]">
+                        {user.full_name?.charAt(0) || 'U'}
+                      </div>
+                      <div>
+                        <div className="font-bold flex items-center gap-2">
+                          {user.full_name}
+                          {user.roles && user.roles.includes('admin') && <Badge className="bg-red-100 text-red-700">Admin</Badge>}
+                        </div>
+                        <div className="text-sm text-slate-500">{user.email} • ID: {user.id}</div>
+                      </div>
                     </div>
-                    <Button variant="outline" onClick={() => openEditDialog(user)}>Ruoli</Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(user)}>
+                        <Edit className="w-4 h-4 mr-2" /> Ruoli
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-[#053c5e] hover:bg-blue-50"
+                        onClick={() => {
+                          if (window.confirm(`Inviare un'email di reset password a ${user.email}?`)) {
+                            triggerResetMutation.mutate(user.id);
+                          }
+                        }}
+                      >
+                        <Shield className="w-4 h-4 mr-2" /> Reset Pass
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50"
+                        onClick={() => {
+                          if (window.confirm(`Sei sicuro di voler eliminare DEFINITIVAMENTE l'utente ${user.full_name}? Questa azione non è reversibile.`)) {
+                            deleteUserMutation.mutate(user.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" /> Elimina
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

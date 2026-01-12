@@ -216,4 +216,54 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+// POST /auth/admin-trigger-reset (Triggered by Admin for a user)
+router.post('/admin-trigger-reset', authMiddleware, async (req, res) => {
+    try {
+        // Check if requester is admin
+        const requesterRoles = req.user.roles || [req.user.role];
+        if (!requesterRoles.some(r => ['admin', 'super_admin'].includes(r))) {
+            return res.status(403).json({ error: 'Accesso negato. Solo gli amministratori possono forzare il reset.' });
+        }
+
+        const { userId } = req.body;
+        if (!userId) return res.status(400).json({ error: 'ID utente richiesto' });
+
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(404).json({ error: 'Utente non trovato' });
+
+        // Genera token di reset (valido 1 ora)
+        const resetToken = jwt.sign(
+            { userId: user.id, purpose: 'password_reset' },
+            process.env.JWT_SECRET || 'supersecret',
+            { expiresIn: '1h' }
+        );
+
+        // Invia email
+        const { sendEmail } = require('../utils/email');
+        const resetUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/ResetPassword?token=${resetToken}`;
+
+        const html = `
+            <h2>Reset della Password - neu [nòi]</h2>
+            <p>Ciao ${user.full_name},</p>
+            <p>Un amministratore di neu [nòi] ha avviato una procedura di reset della password per il tuo account.</p>
+            <p>Per impostare una nuova password, clicca sul link qui sotto:</p>
+            <p><a href="${resetUrl}" style="background-color: #053c5e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+            <p>Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:</p>
+            <p>${resetUrl}</p>
+            <p>Il link scadrà tra un'ora.</p>
+        `;
+
+        await sendEmail({
+            to: user.email,
+            subject: 'Re-impostazione Password - neu [nòi]',
+            html: html
+        });
+
+        res.json({ message: `Email di reset inviata con successo a ${user.email}` });
+    } catch (error) {
+        console.error('[ADMIN-TRIGGER-RESET] Error:', error);
+        res.status(500).json({ error: 'Errore durante l\'invio dell\'email di reset' });
+    }
+});
+
 module.exports = router;
