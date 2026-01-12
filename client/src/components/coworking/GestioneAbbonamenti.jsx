@@ -17,6 +17,7 @@ import { generateRicevutaPDF } from '@/utils/receiptGenerator';
 
 export default function GestioneAbbonamenti() {
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   // Existing/Restored State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [ingressoDialogOpen, setIngressoDialogOpen] = useState(false);
@@ -225,12 +226,16 @@ export default function GestioneAbbonamenti() {
 
   const rinnovaMutation = useMutation({
     mutationFn: async ({ abbonamento, metodoPagamento }) => {
-      // Robust matching using String for comparison
-      const tipo = tipiAbbonamento.find(t => String(t.id) === String(abbonamento.tipo_abbonamento_id));
-      const profilo = profili.find(p => String(p.id) === String(abbonamento.profilo_coworker_id));
+      // 1. Find the profile based on email if possible, fallback to ID
+      // This is more robust as requested by user
+      const sourceProfile = profili.find(p => String(p.id) === String(abbonamento.profilo_coworker_id));
+      const emailToMatch = sourceProfile?.email || abbonamento.profilo_email;
 
-      if (!tipo) throw new Error("Tipo abbonamento non trovato per questo abbonamento.");
-      if (!profilo) throw new Error("Profilo socio non trovato (potrebbe essere stato eliminato).");
+      const profilo = profili.find(p => p.email?.toLowerCase() === emailToMatch?.toLowerCase()) || sourceProfile;
+      const tipo = tipiAbbonamento.find(t => String(t.id) === String(abbonamento.tipo_abbonamento_id));
+
+      if (!profilo) throw new Error("Profilo socio non trovato. Impossibile procedere con il rinnovo.");
+      if (!tipo) throw new Error("Tipo abbonamento non trovato.");
 
       // PREPARA PRODOTTI (Must be JSON string for the DB)
       const prodottiArray = [{
@@ -244,22 +249,20 @@ export default function GestioneAbbonamenti() {
       // Crea ordine
       const ordine = await neunoi.entities.OrdineCoworking.create({
         user_id: profilo.user_id,
-        profilo_coworker_id: abbonamento.profilo_coworker_id,
-        profilo_nome_completo: abbonamento.profilo_nome_completo,
+        profilo_coworker_id: profilo.id,
+        profilo_nome_completo: profilo.first_name ? `${profilo.first_name} ${profilo.last_name}` : abbonamento.profilo_nome_completo,
         profilo_email: profilo.email,
         data_ordine: new Date().toISOString().split('T')[0],
         prodotti: JSON.stringify(prodottiArray),
         totale: tipo.prezzo,
         metodo_pagamento: metodoPagamento,
         stato_pagamento: metodoPagamento === 'non_pagato' ? 'non_pagato' : 'pagato',
-        note: `Rinnovo abbonamento`
+        note: `Rinnovo abbonamento (${abbonamento.tipo_abbonamento_nome})`
       });
 
-      // Crea nuovo abbonamento con data inizio = data scadenza vecchio + 1 giorno
+      // Nuove date...
       const dataInizio = new Date(abbonamento.data_scadenza);
       dataInizio.setDate(dataInizio.getDate() + 1);
-
-      // Ensure time is normalized to avoid drift
       dataInizio.setHours(12, 0, 0, 0);
 
       let dataScadenza = new Date(dataInizio);
@@ -272,8 +275,8 @@ export default function GestioneAbbonamenti() {
 
       await neunoi.entities.AbbonamentoUtente.create({
         user_id: profilo.user_id,
-        profilo_coworker_id: abbonamento.profilo_coworker_id,
-        profilo_nome_completo: abbonamento.profilo_nome_completo,
+        profilo_coworker_id: profilo.id,
+        profilo_nome_completo: profilo.first_name ? `${profilo.first_name} ${profilo.last_name}` : abbonamento.profilo_nome_completo,
         tipo_abbonamento_id: abbonamento.tipo_abbonamento_id,
         tipo_abbonamento_nome: abbonamento.tipo_abbonamento_nome,
         data_inizio: dataInizio.toISOString().split('T')[0],

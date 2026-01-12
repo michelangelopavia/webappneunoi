@@ -10,6 +10,25 @@ const getHeaders = () => {
     };
 };
 
+const fetchWithTimeout = async (url, options = {}, timeout = 30000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error('Richiesta scaduta (timeout). Verifica la connessione o riprova tra poco.');
+        }
+        throw error;
+    }
+};
+
 const handleResponse = async (response) => {
     if (!response.ok) {
         if (response.status === 401) {
@@ -126,17 +145,17 @@ export const neunoi = {
             const formData = new FormData();
             formData.append('database', file);
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(API_ADMIN_RESTORE, {
+            const res = await fetchWithTimeout(API_ADMIN_RESTORE, {
                 method: 'POST',
                 headers: {
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: formData
-            });
+            }, 60000); // 60s for DB
             return handleResponse(res);
         },
         getSystemDiag: async () => {
-            const res = await fetch(`${API_URL}/api/system-diag`, {
+            const res = await fetchWithTimeout(`${API_URL}/api/system-diag`, {
                 headers: getHeaders()
             });
             return handleResponse(res);
@@ -144,7 +163,7 @@ export const neunoi = {
     },
     auth: {
         login: async (email, password) => {
-            const res = await fetch(`${API_URL}/auth/login`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -156,7 +175,7 @@ export const neunoi = {
             return data;
         },
         register: async (email, password, full_name) => {
-            const res = await fetch(`${API_URL}/auth/register`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, full_name })
@@ -168,15 +187,15 @@ export const neunoi = {
             return data;
         },
         forgotPassword: async (email) => {
-            const res = await fetch(`${API_URL}/auth/forgot-password`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/forgot-password`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ email })
-            });
+            }, 45000); // 45s for email
             return handleResponse(res);
         },
         resetPassword: async (token, newPassword) => {
-            const res = await fetch(`${API_URL}/auth/reset-password`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/reset-password`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ token, newPassword })
@@ -184,13 +203,13 @@ export const neunoi = {
             return handleResponse(res);
         },
         me: async () => {
-            const res = await fetch(`${API_URL}/auth/me`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/me`, {
                 headers: getHeaders()
             });
             return handleResponse(res);
         },
         updateProfile: async (data) => {
-            const res = await fetch(`${API_URL}/auth/update`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/update`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify(data)
@@ -198,7 +217,7 @@ export const neunoi = {
             return handleResponse(res);
         },
         changePassword: async (currentPassword, newPassword) => {
-            const res = await fetch(`${API_URL}/auth/change-password`, {
+            const res = await fetchWithTimeout(`${API_URL}/auth/change-password`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ currentPassword, newPassword })

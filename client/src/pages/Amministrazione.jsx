@@ -68,11 +68,6 @@ export default function Amministrazione() {
   const [userRoleFilter, setUserRoleFilter] = useState('all');
   const [dichSearch, setDichSearch] = useState('');
 
-  // NEW DIAG DATA
-  const [diagData, setDiagData] = useState(null);
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [dbFile, setDbFile] = useState(null);
-
   const queryClient = useQueryClient();
 
   const availableRoles = [
@@ -111,31 +106,7 @@ export default function Amministrazione() {
   useEffect(() => {
     loadUsers();
     loadProfiliSoci();
-    loadDiag();
   }, []);
-
-  const loadDiag = async () => {
-    try {
-      const data = await neunoi.admin.getSystemDiag();
-      setDiagData(data);
-    } catch (e) { console.error("Diag failed", e); }
-  };
-
-  const handleRestoreDb = async () => {
-    if (!dbFile) return toast.error("Seleziona un file .sqlite");
-    if (!window.confirm("Attenzione! Questo sovrascriverà TUTTI i dati attuali sul server con quelli del file caricato. Il server si riavvierà. Procedere?")) return;
-
-    setIsRestoring(true);
-    try {
-      await neunoi.admin.restoreDatabase(dbFile);
-      toast.success("Database ripristinato con successo! Il server si sta riavviando...");
-      setTimeout(() => window.location.reload(), 2000);
-    } catch (e) {
-      toast.error("Errore durante il ripristino: " + e.message);
-    } finally {
-      setIsRestoring(false);
-    }
-  };
 
   const loadUsers = async () => {
     try {
@@ -396,13 +367,12 @@ export default function Amministrazione() {
       </div>
 
       <Tabs defaultValue="neu" className="w-full">
-        <TabsList className="h-auto grid w-full grid-cols-1 md:grid-cols-5 bg-[#bfdbf7]">
+        <TabsList className="h-auto grid w-full grid-cols-1 md:grid-cols-4 bg-[#bfdbf7]">
           <TabsTrigger value="neu">Gestione NEU</TabsTrigger>
           <TabsTrigger value="utenti">Utenti</TabsTrigger>
           <TabsTrigger value="volontariato">Volontariato</TabsTrigger>
           <TabsTrigger value="coworking">Coworking</TabsTrigger>
-          <TabsTrigger value="impostazioni">Impostazioni</TabsTrigger>
-          <TabsTrigger value="sistema">Sistema / Debug</TabsTrigger>
+          <TabsTrigger value="impostazioni">Impostazioni Sistema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="neu" className="mt-6 space-y-6">
@@ -571,88 +541,6 @@ export default function Amministrazione() {
         </TabsContent>
         <TabsContent value="impostazioni" className="mt-6">
           <GestioneImpostazioni />
-        </TabsContent>
-
-        <TabsContent value="sistema" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-red-200">
-              <CardHeader className="bg-red-50">
-                <CardTitle className="text-red-800 flex items-center gap-2">
-                  <Shield className="w-5 h-5" /> Ripristino Emergenza Database
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                <p className="text-sm text-slate-600">
-                  Usa questa funzione per caricare il tuo database locale (<code>database.sqlite</code>) sul server Railway se hai riscontrato una perdita di dati.
-                </p>
-                <div className="p-4 bg-orange-50 border-l-4 border-orange-400 text-orange-800 text-sm">
-                  <strong>ATTENZIONE:</strong> Questa operazione sovrascrive istantaneamente tutti i dati sul server. Carica solo file <code>.sqlite</code> validi.
-                </div>
-                <div className="space-y-2 text-sm">
-                  <Label>Seleziona file database.sqlite locale</Label>
-                  <Input
-                    type="file"
-                    accept=".sqlite"
-                    onChange={(e) => setDbFile(e.target.files[0])}
-                  />
-                </div>
-                <Button
-                  onClick={handleRestoreDb}
-                  className="w-full bg-red-600 hover:bg-red-700 font-bold"
-                  disabled={isRestoring || !dbFile}
-                >
-                  {isRestoring ? "Ripristino in corso..." : "Carica e Ripristina Database"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-[#1f7a8c]" /> Stato Sistema Online
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {diagData ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="text-slate-500">Stato Database:</div>
-                      <div className="font-mono text-green-600 font-bold">CONNESSO</div>
-
-                      <div className="text-slate-500">Percorso DB:</div>
-                      <div className="truncate font-mono text-[10px]" title={diagData.db_path_resolved}>
-                        {diagData.db_storage_env !== 'not set' ? 'VOLUME PERSISTENTE' : 'LOCALE / TEMPORANEO'}
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-2 mt-2">
-                      <p className="text-xs font-bold text-slate-400 mb-2 uppercase">Conteggio Record Attuali:</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-slate-50 p-2 rounded text-center">
-                          <div className="text-lg font-bold">{diagData.counts?.users ?? 0}</div>
-                          <div className="text-[10px] text-slate-500">Utenti</div>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded text-center">
-                          <div className="text-lg font-bold">{diagData.counts?.soci ?? 0}</div>
-                          <div className="text-[10px] text-slate-500">Soci</div>
-                        </div>
-                        <div className="bg-slate-50 p-2 rounded text-center">
-                          <div className="text-lg font-bold">{diagData.counts?.orders ?? 0}</div>
-                          <div className="text-[10px] text-slate-500">Ordini</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button variant="outline" size="sm" onClick={loadDiag} className="w-full mt-2">
-                      <RefreshCw className="w-3 h-3 mr-2" /> Aggiorna Diagnostica
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 text-center py-4">Caricamento diagnostica...</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
       </Tabs>
 

@@ -2,50 +2,60 @@ const nodemailer = require('nodemailer');
 const { SistemaSetting } = require('../models');
 
 async function getTransporter() {
-    // We can use environment variables as primary source, 
-    // but the user wants to set it up.
-    // Let's use env vars for now as per image.
+  // We can use environment variables as primary source, 
+  // but the user wants to set it up.
+  // Let's use env vars for now as per image.
 
-    const port = parseInt(process.env.SMTP_PORT || '465');
-    const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const port = parseInt(process.env.SMTP_PORT || '465');
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
 
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'mail.neunoi.it',
-        port: port,
-        secure: secure,
-        auth: {
-            user: process.env.SMTP_USER || 'coworking@neunoi.it',
-            pass: process.env.SMTP_PASS || 'n3un01_5p4z104ll4v0r0',
-        },
-        tls: {
-            // Do not fail on invalid certs
-            rejectUnauthorized: false
-        }
-    });
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'mail.neunoi.it',
+    port: port,
+    secure: secure,
+    auth: {
+      user: process.env.SMTP_USER || 'coworking@neunoi.it',
+      pass: process.env.SMTP_PASS || 'n3un01_5p4z104ll4v0r0',
+    },
+    tls: {
+      // Do not fail on invalid certs
+      rejectUnauthorized: false
+    }
+  });
+
+  try {
+    // Verify connection configuration
+    await transporter.verify();
+    return transporter;
+  } catch (error) {
+    console.error('[EMAIL] Transporter verification failed:', error);
+    throw error;
+  }
 }
 
 async function sendEmail({ to, subject, text, html, attachments }) {
-    try {
-        const transporter = await getTransporter();
-        const info = await transporter.sendMail({
-            from: process.env.SMTP_FROM || '"neu [nòi]" <coworking@neunoi.it>',
-            to,
-            subject,
-            text,
-            html,
-            attachments
-        });
-        console.log(`[EMAIL] Sent to ${to}: ${info.messageId}`);
-        return info;
-    } catch (error) {
-        console.error('[EMAIL] Error sending email:', error);
-        throw error;
-    }
+  console.log(`[EMAIL] Tentativo invio a ${to}...`);
+  try {
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_FROM || '"neu [nòi]" <coworking@neunoi.it>',
+      to,
+      subject,
+      text,
+      html,
+      attachments
+    });
+    console.log(`[EMAIL] Inviata con successo a ${to}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    console.error('[EMAIL] Error sending email:', error);
+    throw error;
+  }
 }
 
 function getHtmlTemplate(content) {
-    const logoUrl = 'https://www.h2oh.neunoi.it/wp-content/uploads/2025/03/neunoi_logo_bianco.png';
-    return `
+  const logoUrl = 'https://www.h2oh.neunoi.it/wp-content/uploads/2025/03/neunoi_logo_bianco.png';
+  return `
       <!DOCTYPE html>
       <html>
         <head>
@@ -79,44 +89,44 @@ function getHtmlTemplate(content) {
 }
 
 async function sendCheckInEmail(data) {
-    try {
-        const { ProfiloCoworker, User, SistemaSetting } = require('../models');
-        let email = data.email || data.profilo_email;
-        let nome = data.full_name || data.profilo_nome_completo || (data.first_name ? `${data.first_name} ${data.last_name}` : 'Membro');
+  try {
+    const { ProfiloCoworker, User, SistemaSetting } = require('../models');
+    let email = data.email || data.profilo_email;
+    let nome = data.full_name || data.profilo_nome_completo || (data.first_name ? `${data.first_name} ${data.last_name}` : 'Membro');
 
-        // Se è un ingresso, cerchiamo il profilo per avere l'email
-        if (!email && data.profilo_coworker_id) {
-            const profile = await ProfiloCoworker.findByPk(data.profilo_coworker_id);
-            if (profile) email = profile.email;
-        }
-
-        if (!email && data.user_id) {
-            const user = await User.findByPk(data.user_id);
-            if (user) email = user.email;
-        }
-
-        if (!email) {
-            console.log('[EMAIL] No email found for check-in notification');
-            return;
-        }
-
-        const template = await SistemaSetting.findOne({ where: { chiave: 'testo_mail_checkin' } });
-        let rawContent = template ? template.valore : 'Gentile {nome},\n\nBenvenuto/a in neu [nòi]! Siamo felici di averti con noi oggi.\n\nIl tuo check-in è stato registrato correttamente.\n\nBuon lavoro!';
-
-        // Personalizzazione base
-        const finalContent = rawContent.replace(/{nome}/g, nome);
-
-        await sendEmail({
-            to: email,
-            subject: 'Benvenuto in neu [nòi] - Check-in completato',
-            html: getHtmlTemplate(finalContent)
-        });
-    } catch (error) {
-        console.error('[EMAIL] Failed to send check-in email:', error);
+    // Se è un ingresso, cerchiamo il profilo per avere l'email
+    if (!email && data.profilo_coworker_id) {
+      const profile = await ProfiloCoworker.findByPk(data.profilo_coworker_id);
+      if (profile) email = profile.email;
     }
+
+    if (!email && data.user_id) {
+      const user = await User.findByPk(data.user_id);
+      if (user) email = user.email;
+    }
+
+    if (!email) {
+      console.log('[EMAIL] No email found for check-in notification');
+      return;
+    }
+
+    const template = await SistemaSetting.findOne({ where: { chiave: 'testo_mail_checkin' } });
+    let rawContent = template ? template.valore : 'Gentile {nome},\n\nBenvenuto/a in neu [nòi]! Siamo felici di averti con noi oggi.\n\nIl tuo check-in è stato registrato correttamente.\n\nBuon lavoro!';
+
+    // Personalizzazione base
+    const finalContent = rawContent.replace(/{nome}/g, nome);
+
+    await sendEmail({
+      to: email,
+      subject: 'Benvenuto in neu [nòi] - Check-in completato',
+      html: getHtmlTemplate(finalContent)
+    });
+  } catch (error) {
+    console.error('[EMAIL] Failed to send check-in email:', error);
+  }
 }
 
 module.exports = {
-    sendEmail,
-    sendCheckInEmail
+  sendEmail,
+  sendCheckInEmail
 };
