@@ -59,6 +59,46 @@ app.use('/api/entities', require('./routes/entities'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/coworking', require('./routes/coworking'));
 
+// Multer for DB restoration
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/temp/' });
+
+app.post('/api/admin/restore-db', upload.single('database'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
+
+        const dbPath = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
+        const tempPath = req.file.path;
+
+        console.log(`[RESTORE] Tentativo ripristino DB da: ${tempPath} a ${dbPath}`);
+
+        // Robust close/replace
+        await sequelize.close();
+
+        // Backup current (just in case)
+        if (fs.existsSync(dbPath)) {
+            fs.copyFileSync(dbPath, `${dbPath}.bak`);
+        }
+
+        // Replace
+        fs.copyFileSync(tempPath, dbPath);
+        fs.unlinkSync(tempPath);
+
+        // Re-open
+        await sequelize.authenticate();
+
+        console.log('[RESTORE] Database ripristinato con successo');
+        res.json({ message: 'Database ripristinato. Il server potrebbe necessitare di un riavvio per ricaricare tutti i dati.' });
+
+        // Trigger exit to let Process Manager (Railway) restart it with new data connection
+        setTimeout(() => process.exit(0), 1000);
+
+    } catch (e) {
+        console.error('[RESTORE] Errore critico:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/backup-database-neunoi', (req, res) => {
     const dbPath = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
     if (fs.existsSync(dbPath)) {
@@ -139,19 +179,23 @@ app.get('/api/run-migration-neunoi', async (req, res) => {
 
 app.get('/api/system-diag', async (req, res) => {
     try {
-        const { User, AbbonamentoUtente, OrdineCoworking } = require('./models');
-        const userCount = await User.count();
-        const subCount = await AbbonamentoUtente.count();
-        const orderCount = await OrdineCoworking.count();
+        const { User, AbbonamentoUtente, OrdineCoworking, ProfiloSocio, ProfiloCoworker, TransazioneNEU } = require('./models');
+        const counts = {
+            users: await User.count().catch(() => -1),
+            subscriptions: await AbbonamentoUtente.count().catch(() => -1),
+            orders: await OrdineCoworking.count().catch(() => -1),
+            soci: await ProfiloSocio.count().catch(() => -1),
+            coworkers: await ProfiloCoworker.count().catch(() => -1),
+            transactions: await TransazioneNEU.count().catch(() => -1)
+        };
 
         res.json({
             status: 'online',
-            db_path: process.env.DB_STORAGE || 'local (server/database.sqlite)',
-            counts: {
-                users: userCount,
-                subscriptions: subCount,
-                orders: orderCount
-            },
+            db_storage_env: process.env.DB_STORAGE || 'not set',
+            db_path_resolved: path.resolve(process.env.DB_STORAGE || './database.sqlite'),
+            counts,
+            env: process.env.NODE_ENV,
+            railway_static_url: process.env.RAILWAY_STATIC_URL || 'not set',
             time: new Date().toISOString()
         });
     } catch (e) {

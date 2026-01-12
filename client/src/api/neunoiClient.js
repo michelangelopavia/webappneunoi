@@ -34,6 +34,8 @@ const handleResponse = async (response) => {
     }
 };
 
+const API_ADMIN_RESTORE = `${API_URL}/api/admin/restore-db`;
+
 // Generic Entity Handler
 const createEntityHandler = (entityName) => ({
     list: async (sortOrOptions, limit) => {
@@ -119,6 +121,27 @@ const createEntityHandler = (entityName) => ({
 });
 
 export const neunoi = {
+    admin: {
+        restoreDatabase: async (file) => {
+            const formData = new FormData();
+            formData.append('database', file);
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(API_ADMIN_RESTORE, {
+                method: 'POST',
+                headers: {
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: formData
+            });
+            return handleResponse(res);
+        },
+        getSystemDiag: async () => {
+            const res = await fetch(`${API_URL}/api/system-diag`, {
+                headers: getHeaders()
+            });
+            return handleResponse(res);
+        }
+    },
     auth: {
         login: async (email, password) => {
             const res = await fetch(`${API_URL}/auth/login`, {
