@@ -137,6 +137,28 @@ app.get('/api/run-migration-neunoi', async (req, res) => {
     }
 });
 
+app.get('/api/system-diag', async (req, res) => {
+    try {
+        const { User, AbbonamentoUtente, OrdineCoworking } = require('./models');
+        const userCount = await User.count();
+        const subCount = await AbbonamentoUtente.count();
+        const orderCount = await OrdineCoworking.count();
+
+        res.json({
+            status: 'online',
+            db_path: process.env.DB_STORAGE || 'local (server/database.sqlite)',
+            counts: {
+                users: userCount,
+                subscriptions: subCount,
+                orders: orderCount
+            },
+            time: new Date().toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/', (req, res) => {
     res.json({ message: 'Neu Noi Gestione Associazione API' });
 });

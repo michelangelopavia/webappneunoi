@@ -10,15 +10,18 @@ const authMiddleware = require('../middleware/auth');
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log(`[LOGIN] Tentativo di accesso per: ${email}`);
+
         // Case-insensitive search
         const user = await User.findOne({
             where: sequelize.where(
                 sequelize.fn('LOWER', sequelize.col('email')),
-                email.toLowerCase()
+                email.toLowerCase().trim()
             )
         });
 
         if (!user) {
+            console.warn(`[LOGIN] Utente non trovato: ${email}`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
@@ -27,10 +30,14 @@ router.post('/login', async (req, res) => {
         // For now, let's assume a simple check or a default password for migrated users?
         // Let's implement standard check:
         const isValid = await bcrypt.compare(password, user.password_hash || '');
+        console.log(`[LOGIN] Utente trovato: ${user.full_name}, Validazione password: ${isValid}`);
         // Fallback for dev: if password is 'password', allow (REMOVE IN PROD)
         if (!isValid && password !== 'password123') {
+            console.warn(`[LOGIN] Password errata per: ${email}`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        console.log(`[LOGIN] Accesso autorizzato per: ${email}`);
 
         const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'supersecret', { expiresIn: '7d' });
         res.json({ token, user });
