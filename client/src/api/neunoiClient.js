@@ -144,6 +144,22 @@ export const neunoi = {
             }
             return data;
         },
+        forgotPassword: async (email) => {
+            const res = await fetch(`${API_URL}/auth/forgot-password`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ email })
+            });
+            return handleResponse(res);
+        },
+        resetPassword: async (token, newPassword) => {
+            const res = await fetch(`${API_URL}/auth/reset-password`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ token, newPassword })
+            });
+            return handleResponse(res);
+        },
         me: async () => {
             const res = await fetch(`${API_URL}/auth/me`, {
                 headers: getHeaders()

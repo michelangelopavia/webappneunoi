@@ -30,6 +30,8 @@ import Volontariato from "./Volontariato";
 import Welcome from "./Welcome";
 import Login from "./Login";
 import Register from "./Register";
+import ForgotPassword from "./ForgotPassword";
+import ResetPassword from "./ResetPassword";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -64,6 +66,9 @@ const PAGES = {
 
     Welcome: Welcome,
     Login: Login,
+    Register: Register,
+    ForgotPassword: ForgotPassword,
+    ResetPassword: ResetPassword,
 
 }
 
@@ -122,6 +127,8 @@ function PagesContent() {
                 <Route path="/Welcome" element={<Welcome />} />
                 <Route path="/Login" element={<Login />} />
                 <Route path="/Register" element={<Register />} />
+                <Route path="/ForgotPassword" element={<ForgotPassword />} />
+                <Route path="/ResetPassword" element={<ResetPassword />} />
 
             </Routes>
         </Layout>

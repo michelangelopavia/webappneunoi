@@ -85,7 +85,10 @@ export default function Login() {
                         </Button>
                     </form>
                 </CardContent>
-                <CardFooter className="flex justify-center">
+                <CardFooter className="flex flex-col gap-2">
+                    <p className="text-sm text-slate-500">
+                        <Link to="/ForgotPassword" title="Ripristina la tua password" className="text-[#1f7a8c] hover:underline font-medium">Password dimenticata?</Link>
+                    </p>
                     <p className="text-sm text-slate-500">
                         Non hai un account? <Link to="/Register" className="text-[#1f7a8c] hover:underline">Registrati</Link>
                     </p>
