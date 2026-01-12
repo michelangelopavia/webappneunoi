@@ -225,8 +225,21 @@ export default function GestioneAbbonamenti() {
 
   const rinnovaMutation = useMutation({
     mutationFn: async ({ abbonamento, metodoPagamento }) => {
-      const tipo = tipiAbbonamento.find(t => t.id === abbonamento.tipo_abbonamento_id);
-      const profilo = profili.find(p => p.id === abbonamento.profilo_coworker_id);
+      // Robust matching using String for comparison
+      const tipo = tipiAbbonamento.find(t => String(t.id) === String(abbonamento.tipo_abbonamento_id));
+      const profilo = profili.find(p => String(p.id) === String(abbonamento.profilo_coworker_id));
+
+      if (!tipo) throw new Error("Tipo abbonamento non trovato per questo abbonamento.");
+      if (!profilo) throw new Error("Profilo socio non trovato (potrebbe essere stato eliminato).");
+
+      // PREPARA PRODOTTI (Must be JSON string for the DB)
+      const prodottiArray = [{
+        tipo_abbonamento_id: abbonamento.tipo_abbonamento_id,
+        tipo_abbonamento_nome: abbonamento.tipo_abbonamento_nome,
+        quantita: 1,
+        prezzo_unitario: tipo.prezzo,
+        prezzo_totale: tipo.prezzo
+      }];
 
       // Crea ordine
       const ordine = await neunoi.entities.OrdineCoworking.create({
@@ -235,13 +248,7 @@ export default function GestioneAbbonamenti() {
         profilo_nome_completo: abbonamento.profilo_nome_completo,
         profilo_email: profilo.email,
         data_ordine: new Date().toISOString().split('T')[0],
-        prodotti: [{
-          tipo_abbonamento_id: abbonamento.tipo_abbonamento_id,
-          tipo_abbonamento_nome: abbonamento.tipo_abbonamento_nome,
-          quantita: 1,
-          prezzo_unitario: tipo.prezzo,
-          prezzo_totale: tipo.prezzo
-        }],
+        prodotti: JSON.stringify(prodottiArray),
         totale: tipo.prezzo,
         metodo_pagamento: metodoPagamento,
         stato_pagamento: metodoPagamento === 'non_pagato' ? 'non_pagato' : 'pagato',
@@ -251,13 +258,17 @@ export default function GestioneAbbonamenti() {
       // Crea nuovo abbonamento con data inizio = data scadenza vecchio + 1 giorno
       const dataInizio = new Date(abbonamento.data_scadenza);
       dataInizio.setDate(dataInizio.getDate() + 1);
-      let dataScadenza = new Date(dataInizio);
 
+      // Ensure time is normalized to avoid drift
+      dataInizio.setHours(12, 0, 0, 0);
+
+      let dataScadenza = new Date(dataInizio);
       if (tipo.durata_mesi) {
         dataScadenza.setMonth(dataScadenza.getMonth() + tipo.durata_mesi);
       } else if (tipo.durata_giorni) {
         dataScadenza.setDate(dataScadenza.getDate() + tipo.durata_giorni);
       }
+      dataScadenza.setHours(12, 0, 0, 0);
 
       await neunoi.entities.AbbonamentoUtente.create({
         user_id: profilo.user_id,
@@ -277,22 +288,24 @@ export default function GestioneAbbonamenti() {
 
       // Se non pagato, crea task reminder
       if (metodoPagamento === 'non_pagato') {
-        const currentUser = await neunoi.auth.me();
-        await neunoi.entities.TaskNotifica.create({
-          tipo: 'task_manuale',
-          titolo: `ordine non pagato - effettuare il pagamento! (${abbonamento.profilo_nome_completo})`,
-          descrizione: `Rinnovo ${abbonamento.tipo_abbonamento_nome} per un totale di €${tipo.prezzo.toFixed(2)}`,
-          creato_da_id: currentUser.id,
-          creato_da_nome: currentUser.full_name,
-          destinatario_tipo: 'host',
-          data_inizio: new Date().toISOString().split('T')[0],
-          riferimento_ordine_id: ordine.id,
-          priorita: 'alta',
-          stato: 'attivo'
-        });
+        try {
+          const currentUser = await neunoi.auth.me();
+          await neunoi.entities.TaskNotifica.create({
+            tipo: 'task_manuale',
+            titolo: `ordine non pagato - effettuare il pagamento! (${abbonamento.profilo_nome_completo})`,
+            descrizione: `Rinnovo ${abbonamento.tipo_abbonamento_nome} per un totale di €${tipo.prezzo.toFixed(2)}`,
+            creato_da_id: currentUser.id,
+            creato_da_nome: currentUser.full_name,
+            destinatario_tipo: 'host',
+            data_inizio: new Date().toISOString().split('T')[0],
+            riferimento_ordine_id: ordine.id,
+            priorita: 'alta',
+            stato: 'attivo'
+          });
+        } catch (e) { console.error("Task creation failed", e); }
       }
 
-      return ordine;
+      return { ...ordine, prodotti: prodottiArray };
     },
     onSuccess: (ordine) => {
       queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
@@ -305,10 +318,13 @@ export default function GestioneAbbonamenti() {
 
       // Genera ricevuta
       setTimeout(() => {
-        // Find profile for better data
-        const profilo = profili.find(p => p.id === ordine.profilo_coworker_id);
+        const profilo = profili.find(p => String(p.id) === String(ordine.profilo_coworker_id));
         generateRicevutaPDF(ordine, null, profilo);
       }, 500);
+    },
+    onError: (error) => {
+      console.error('Renewal Error:', error);
+      toast.error('Errore durante il rinnovo: ' + (error.message || 'Errore tecnico'));
     }
   });
 
