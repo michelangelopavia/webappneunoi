@@ -3,4 +3,8 @@ node_modules
 dist
 build
 cp_backup
+*.sqlite
+server/*.sqlite
+server/backups/
+server/uploads/
 
