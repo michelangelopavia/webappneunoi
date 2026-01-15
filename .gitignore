@@ -3,6 +3,11 @@ node_modules
 dist
 build
 cp_backup
+backups/
 server/backups/
 server/uploads/
+Feedback/extracted_docx/
+Feedback/Sicurezza.zip
+server/migrate_*.js
+server/*_database.sqlite
 

@@ -126,8 +126,10 @@ export default function RegistraIngressoDialog({ open, onOpenChange }) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
-            toast.success('Ingresso registrato');
-            handleClose();
+            queryClient.invalidateQueries({ queryKey: ['ingressi'] });
+            queryClient.invalidateQueries({ queryKey: ['attivita_giorno'] });
+            toast.success('Ingresso registrato correttamente');
+            onOpenChange(false);
         },
         onError: (err) => {
             toast.error('Errore: ' + (err.message || 'impossibile registrare ingresso'));

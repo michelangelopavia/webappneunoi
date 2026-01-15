@@ -31,10 +31,22 @@ router.post('/login', async (req, res) => {
         // Let's implement standard check:
         const isValid = await bcrypt.compare(password, user.password_hash || '');
         console.log(`[LOGIN] Utente trovato: ${user.full_name}, Validazione password: ${isValid}`);
-        // Fallback for dev: if password is 'password', allow (REMOVE IN PROD)
-        if (!isValid && password !== 'password123') {
+
+        if (!isValid) {
             console.warn(`[LOGIN] Password errata per: ${email}`);
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Credenziali non valide' });
+        }
+
+        // Verifica stato approvazione
+        if (user.status !== 'approvato') {
+            console.warn(`[LOGIN] Utente non approvato: ${email} (Stato: ${user.status})`);
+            const statusMessages = {
+                'in_attesa': 'Il tuo account è in attesa di approvazione da parte di un amministratore.',
+                'sospeso': 'Il tuo account è stato sospeso. Contatta l\'amministrazione.'
+            };
+            return res.status(403).json({
+                error: statusMessages[user.status] || 'Accesso non autorizzato'
+            });
         }
 
         console.log(`[LOGIN] Accesso autorizzato per: ${email}`);
@@ -62,7 +74,8 @@ router.post('/register', async (req, res) => {
             full_name,
             role: 'coworker',
             roles: ['coworker'],
-            tipo_utente: 'coworker'
+            tipo_utente: 'coworker',
+            status: 'in_attesa'
         });
 
         // Auto-create or Sync ProfiloCoworker
@@ -127,7 +140,7 @@ router.post('/change-password', authMiddleware, async (req, res) => {
 
         // Verifica password attuale
         const isValid = await bcrypt.compare(currentPassword, req.user.password_hash || '');
-        if (!isValid && currentPassword !== 'password123') { // Manteniamo fallback per ora come in login
+        if (!isValid) {
             return res.status(401).json({ error: 'Password attuale non corretta' });
         }
 

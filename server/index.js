@@ -15,6 +15,10 @@ process.on('uncaughtException', (err, origin) => {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const helmet = require('helmet');
+
+// Basic Security Headers
+app.use(helmet());
 
 // Middleware
 const allowedOrigins = [
@@ -267,7 +271,11 @@ sequelize.sync({ force: false }).then(async () => {
     // Run every 12 hours
     setInterval(processNotifications, 12 * 60 * 60 * 1000);
 
-    app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-    });
+    if (process.env.NODE_ENV !== 'test') {
+        app.listen(PORT, () => {
+            console.log(`Server running on http://localhost:${PORT}`);
+        });
+    }
 });
+
+module.exports = app;

@@ -11,6 +11,7 @@ const User = sequelize.define('User', {
         type: DataTypes.JSON,
         defaultValue: []
     },
+    status: { type: DataTypes.STRING, defaultValue: 'in_attesa' }, // in_attesa, approvato, sospeso
     saldo_neu: { type: DataTypes.FLOAT, defaultValue: 0 },
     saldo_neu_scadenza: { type: DataTypes.FLOAT, defaultValue: 0 },
     ore_volontariato_anno: { type: DataTypes.FLOAT, defaultValue: 0 },
@@ -162,7 +163,8 @@ module.exports = {
         note: { type: DataTypes.TEXT },
 
         data_ordine: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-        numero_ricevuta: { type: DataTypes.INTEGER }
+        numero_ricevuta: { type: DataTypes.INTEGER },
+        registrato_da: { type: DataTypes.INTEGER }
     }),
 
     DatiFatturazione: sequelize.define('DatiFatturazione', {

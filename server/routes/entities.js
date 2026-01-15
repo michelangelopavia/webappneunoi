@@ -19,17 +19,90 @@ const getModel = (req, res, next) => {
     next();
 };
 
-// Protect all entity routes EXCEPT ProfiloCoworker create and filter (needed for guest check-in)
-router.use((req, res, next) => {
-    const isPublicCheckIn = (req.path === '/ProfiloCoworker' || req.path === '/ProfiloCoworker/filter') && (req.method === 'POST');
-    if (isPublicCheckIn) {
-        return next();
+// Middleware di autorizzazione e controllo accesso dati
+const checkPermissions = (req, res, next) => {
+    const { modelName } = req.params;
+    const user = req.user;
+    const roles = user?.roles || [user?.role];
+    const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
+
+    // 1. Modelli sensibili accessibili solo ad Admin/Host
+    const sensitiveModels = ['User', 'TransazioneNEU', 'OrdineCoworking', 'AbbonamentoUtente', 'SistemaSetting', 'AzioneVolontariato', 'AmbitoVolontariato'];
+
+    if (sensitiveModels.includes(modelName) && !isAdminOrHost) {
+        // Eccezione: l'utente può accedere ai PROPRI dati
+        const userOwnedModels = ['User', 'OrdineCoworking', 'AbbonamentoUtente', 'TransazioneNEU', 'DichiarazioneVolontariato'];
+
+        if (userOwnedModels.includes(modelName)) {
+            // Se è un filtro, forziamo user_id
+            if (req.path.endsWith('/filter')) {
+                req.body.user_id = user.id;
+                return next();
+            }
+            // Se è un GET singolo, verifichiamo la proprietà nel controller (passiamo avanti)
+            if (req.params.id) {
+                // Se è User, solo se stesso
+                if (modelName === 'User' && req.params.id != user.id) {
+                    return res.status(403).json({ error: 'Non autorizzato ad accedere a questo profilo.' });
+                }
+                return next();
+            }
+            // Se è una lista generica, la blocchiamo (devono usare filter)
+            if (req.path.endsWith('/list')) {
+                return res.status(403).json({ error: `Usa il filtro per accedere ai tuoi dati di ${modelName}.` });
+            }
+        }
+        return res.status(403).json({ error: `Accesso negato al modello ${modelName}.` });
     }
-    return authMiddleware(req, res, next);
+
+    // 2. Protezione Campi Sensibili (Mass Assignment)
+    if (['POST', 'PATCH'].includes(req.method) && !isAdminOrHost) {
+        const restrictedFields = ['role', 'roles', 'saldo_neu', 'status', 'neu_guadagnati', 'approvata', 'confermato', 'email'];
+        restrictedFields.forEach(field => {
+            if (req.body[field] !== undefined) {
+                delete req.body[field];
+            }
+        });
+    }
+
+    next();
+};
+
+// Route pubblica per ProfiloCoworker (Guest Check-in)
+router.post('/ProfiloCoworker/filter', async (req, res, next) => {
+    const allowedFilters = ['email', 'first_name', 'last_name'];
+    const keys = Object.keys(req.body).filter(k => !k.startsWith('_'));
+    if (keys.some(k => !allowedFilters.includes(k))) {
+        return res.status(403).json({ error: 'Filtri non autorizzati per accesso pubblico.' });
+    }
+    next();
+}, getModel, async (req, res) => {
+    // Handler identico al filter generico ma senza auth
+    try {
+        const items = await req.Model.findAll({ where: req.body, limit: 10 });
+        res.json(items);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
+router.post('/ProfiloCoworker', getModel, async (req, res) => {
+    // Handler identico al create generico ma senza auth per il primo inserimento
+    // (In realtà il socio/coworker viene creato dall'host di solito, 
+    // ma supportiamo l'auto-compilazione del profilo)
+    try {
+        const item = await req.Model.create(req.body);
+        res.json(item);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Tutte le altre rotte richiedono autenticazione
+router.use(authMiddleware);
+
 // LIST /api/entities/:modelName/list
-router.get('/:modelName/list', getModel, async (req, res) => {
+router.get('/:modelName/list', getModel, checkPermissions, async (req, res) => {
     try {
         const { sort, limit, offset, include } = req.query;
         const options = {};
@@ -55,7 +128,7 @@ router.get('/:modelName/list', getModel, async (req, res) => {
 });
 
 // FILTER /api/entities/:modelName/filter
-router.post('/:modelName/filter', getModel, async (req, res) => {
+router.post('/:modelName/filter', getModel, checkPermissions, async (req, res) => {
     try {
         const { sort, limit, offset, include } = req.query;
         const parseFilters = (filters) => {
@@ -115,13 +188,21 @@ router.post('/:modelName/filter', getModel, async (req, res) => {
 });
 
 // GET /api/entities/:modelName/:id
-router.get('/:modelName/:id', getModel, async (req, res) => {
+router.get('/:modelName/:id', getModel, checkPermissions, async (req, res) => {
     try {
         const { include } = req.query;
         const options = {};
         if (include === 'all') options.include = { all: true };
         const item = await req.Model.findByPk(req.params.id, options);
         if (!item) return res.status(404).json({ error: 'Item not found' });
+
+        // Verifica proprietà finale per utenti non admin
+        const roles = req.user.roles || [req.user.role];
+        const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
+        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+            return res.status(403).json({ error: 'Accesso negato a risorsa di un altro utente.' });
+        }
+
         res.json(item);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -129,7 +210,7 @@ router.get('/:modelName/:id', getModel, async (req, res) => {
 });
 
 // POST /api/entities/:modelName
-router.post('/:modelName', getModel, async (req, res) => {
+router.post('/:modelName', getModel, checkPermissions, async (req, res) => {
     try {
         const { modelName } = req.params;
         const data = { ...req.body };
@@ -312,11 +393,18 @@ router.post('/:modelName', getModel, async (req, res) => {
 });
 
 // PATCH /api/entities/:modelName/:id
-router.patch('/:modelName/:id', getModel, async (req, res) => {
+router.patch('/:modelName/:id', getModel, checkPermissions, async (req, res) => {
     try {
         const { modelName, id } = req.params;
         const item = await req.Model.findByPk(id);
         if (!item) return res.status(404).json({ error: 'Item not found' });
+
+        // Verifica proprietà per utenti non admin
+        const roles = req.user.roles || [req.user.role];
+        const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
+        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+            return res.status(403).json({ error: 'Accesso negato: non puoi modificare risorse di altri utenti.' });
+        }
 
         if (modelName === 'DichiarazioneVolontariato') {
             const userId = req.body.user_id || item.user_id;
@@ -350,11 +438,18 @@ router.patch('/:modelName/:id', getModel, async (req, res) => {
 });
 
 // DELETE /api/entities/:modelName/:id
-router.delete('/:modelName/:id', getModel, async (req, res) => {
+router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) => {
     try {
         const { modelName, id } = req.params;
         const item = await req.Model.findByPk(id);
         if (!item) return res.status(404).json({ error: 'Item not found' });
+
+        // Verifica proprietà per utenti non admin
+        const roles = req.user.roles || [req.user.role];
+        const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
+        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+            return res.status(403).json({ error: 'Accesso negato: non puoi eliminare risorse di altri utenti.' });
+        }
 
         const usersToSync = [];
         if (item.user_id) usersToSync.push(item.user_id);

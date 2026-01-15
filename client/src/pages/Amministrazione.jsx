@@ -66,6 +66,7 @@ export default function Amministrazione() {
   });
   const [deleteConfirm, setDeleteConfirm] = useState({ id: null, type: null, title: '' });
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [dichSearch, setDichSearch] = useState('');
 
   const queryClient = useQueryClient();
@@ -200,8 +201,11 @@ export default function Amministrazione() {
       (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
     const roles = Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : []);
     const matchesRole = userRoleFilter === 'all' || roles.includes(userRoleFilter);
-    return matchesSearch && matchesRole;
+    const matchesStatus = userStatusFilter === 'all' || user.status === userStatusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
   });
+
+  const pendingUsersCount = (Array.isArray(users) ? users : []).filter(u => u.status === 'in_attesa').length;
 
   const getUserName = (userId) => {
     if (!userId) return 'Associazione';
@@ -285,6 +289,25 @@ export default function Amministrazione() {
       associazione: 'bg-yellow-100 text-yellow-800'
     };
     return colors[role] || 'bg-slate-100 text-slate-800';
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'approvato': return <Badge className="bg-green-100 text-green-700">Approvato</Badge>;
+      case 'in_attesa': return <Badge className="bg-yellow-100 text-yellow-700">In Attesa</Badge>;
+      case 'sospeso': return <Badge className="bg-red-100 text-red-700">Sospeso</Badge>;
+      default: return null;
+    }
+  };
+
+  const handleUpdateStatus = async (userId, newStatus) => {
+    try {
+      await neunoi.entities.User.update(userId, { status: newStatus });
+      loadUsers();
+      toast.success(`✅ Stato utente aggiornato a ${newStatus}`);
+    } catch (error) {
+      toast.error('Errore aggiornamento stato');
+    }
   };
 
   const getTipoTransazioneColor = (tipo) => {
@@ -390,7 +413,14 @@ export default function Amministrazione() {
       <Tabs defaultValue="neu" className="w-full">
         <TabsList className="h-auto grid w-full grid-cols-1 md:grid-cols-4 bg-[#bfdbf7]">
           <TabsTrigger value="neu">Gestione NEU</TabsTrigger>
-          <TabsTrigger value="utenti">Utenti</TabsTrigger>
+          <TabsTrigger value="utenti" className="relative">
+            Utenti
+            {pendingUsersCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                {pendingUsersCount}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="volontariato">Volontariato</TabsTrigger>
           <TabsTrigger value="coworking">Coworking</TabsTrigger>
           <TabsTrigger value="impostazioni">Impostazioni Sistema</TabsTrigger>
@@ -449,9 +479,33 @@ export default function Amministrazione() {
         <TabsContent value="utenti" className="mt-6">
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <CardTitle>Gestione Utenti ({(Array.isArray(users) ? users : []).length})</CardTitle>
-                <Input placeholder="Cerca..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-64" />
+                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                  <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Stato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tutti gli stati</SelectItem>
+                      <SelectItem value="approvato">Approvati</SelectItem>
+                      <SelectItem value="in_attesa">In Attesa</SelectItem>
+                      <SelectItem value="sospeso">Sospesi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Ruolo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tutti i ruoli</SelectItem>
+                      {availableRoles.map(r => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input placeholder="Cerca..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-48" />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -465,12 +519,28 @@ export default function Amministrazione() {
                       <div>
                         <div className="font-bold flex items-center gap-2">
                           {user.full_name}
-                          {user.roles && user.roles.includes('admin') && <Badge className="bg-red-100 text-red-700">Admin</Badge>}
+                          {user.roles && user.roles.includes('admin') && <Badge className="bg-red-100 text-red-700 border-red-200">Admin</Badge>}
+                          {getStatusBadge(user.status)}
                         </div>
                         <div className="text-sm text-slate-500">{user.email} • ID: {user.id}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {user.status === 'in_attesa' && (
+                        <Button className="bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleUpdateStatus(user.id, 'approvato')}>
+                          <CheckCircleIcon className="w-4 h-4 mr-2" /> Approva
+                        </Button>
+                      )}
+                      {user.status === 'approvato' && (
+                        <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleUpdateStatus(user.id, 'sospeso')}>
+                          Sospendi
+                        </Button>
+                      )}
+                      {user.status === 'sospeso' && (
+                        <Button variant="outline" size="sm" className="text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleUpdateStatus(user.id, 'approvato')}>
+                          Riabilita
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => openEditDialog(user)}>
                         <Edit className="w-4 h-4 mr-2" /> Ruoli
                       </Button>

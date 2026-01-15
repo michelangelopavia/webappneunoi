@@ -190,6 +190,7 @@ export default function GestioneAbbonamenti() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       queryClient.invalidateQueries({ queryKey: ['ingressi'] });
+      queryClient.invalidateQueries({ queryKey: ['attivita_giorno'] });
       setIngressoDialogOpen(false);
       setSelectedAbbonamento(null);
       setDataIngresso(new Date().toISOString().split('T')[0]);
@@ -257,7 +258,8 @@ export default function GestioneAbbonamenti() {
         totale: tipo.prezzo,
         metodo_pagamento: metodoPagamento,
         stato_pagamento: metodoPagamento === 'non_pagato' ? 'non_pagato' : 'pagato',
-        note: `Rinnovo abbonamento (${abbonamento.tipo_abbonamento_nome})`
+        note: `Rinnovo abbonamento (${abbonamento.tipo_abbonamento_nome})`,
+        registrato_da: (await neunoi.auth.me()).id
       });
 
       // Nuove date...
@@ -290,23 +292,7 @@ export default function GestioneAbbonamenti() {
       });
 
       // Se non pagato, crea task reminder
-      if (metodoPagamento === 'non_pagato') {
-        try {
-          const currentUser = await neunoi.auth.me();
-          await neunoi.entities.TaskNotifica.create({
-            tipo: 'task_manuale',
-            titolo: `ordine non pagato - effettuare il pagamento! (${abbonamento.profilo_nome_completo})`,
-            descrizione: `Rinnovo ${abbonamento.tipo_abbonamento_nome} per un totale di €${tipo.prezzo.toFixed(2)}`,
-            creato_da_id: currentUser.id,
-            creato_da_nome: currentUser.full_name,
-            destinatario_tipo: 'host',
-            data_inizio: new Date().toISOString().split('T')[0],
-            riferimento_ordine_id: ordine.id,
-            priorita: 'alta',
-            stato: 'attivo'
-          });
-        } catch (e) { console.error("Task creation failed", e); }
-      }
+      // Task reminder creation removed to avoid duplication with NotificheHost auto-detection
 
       return { ...ordine, prodotti: prodottiArray };
     },
@@ -314,6 +300,7 @@ export default function GestioneAbbonamenti() {
       queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
       queryClient.invalidateQueries({ queryKey: ['ordini'] });
       queryClient.invalidateQueries({ queryKey: ['task'] });
+      queryClient.invalidateQueries({ queryKey: ['attivita_giorno'] });
       setRinnovaDialogOpen(false);
       setAbbonamentoDaRinnovare(null);
       setMetodoPagamentoRinnovo('non_pagato');

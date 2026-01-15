@@ -112,7 +112,8 @@ export default function GestioneOrdini() {
         totale: totale,
         metodo_pagamento: data.metodo_pagamento,
         stato_pagamento: data.metodo_pagamento === 'non_pagato' ? 'non_pagato' : 'pagato',
-        note: data.note || ''
+        note: data.note || '',
+        registrato_da: (await neunoi.auth.me()).id
       });
 
       // Crea abbonamenti per ogni prodotto
@@ -153,31 +154,13 @@ export default function GestioneOrdini() {
     onSuccess: async (ordine) => {
       queryClient.invalidateQueries({ queryKey: ['ordini'] });
       queryClient.invalidateQueries({ queryKey: ['abbonamenti'] });
+      queryClient.invalidateQueries({ queryKey: ['attivita_giorno'] });
       setDialogOpen(false);
       resetForm();
       toast.success('Ordine creato con successo');
 
       // Se non pagato, crea task reminder
-      if (ordine.metodo_pagamento === 'non_pagato') {
-        try {
-          const currentUser = await neunoi.auth.me();
-          await neunoi.entities.TaskNotifica.create({
-            tipo: 'task_manuale',
-            titolo: `ordine non pagato - effettuare il pagamento! (${ordine.profilo_nome_completo})`,
-            descrizione: `Ordine del ${new Date(ordine.data_ordine || Date.now()).toLocaleDateString('it-IT')} per un totale di €${(ordine.totale || 0).toFixed(2)}. Prodotti: ${Array.isArray(ordine.prodotti) ? ordine.prodotti.map(p => `${p.tipo_abbonamento_nome} x${p.quantita}`).join(', ') : ''}`,
-            creato_da_id: currentUser.id,
-            creato_da_nome: currentUser.full_name,
-            destinatario_tipo: 'host',
-            data_inizio: new Date().toISOString().split('T')[0],
-            riferimento_ordine_id: ordine.id,
-            priorita: 'alta',
-            stato: 'attivo'
-          });
-          queryClient.invalidateQueries({ queryKey: ['task'] });
-        } catch (error) {
-          console.error('Errore creazione task:', error);
-        }
-      }
+      // Task reminder creation removed to avoid duplication with NotificheHost auto-detection
 
       // Genera sempre la ricevuta (PDF download)
       setTimeout(() => {
