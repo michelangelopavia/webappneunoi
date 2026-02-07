@@ -206,8 +206,11 @@ async function sendVerificationAndRespond(user, verificationToken, res) {
         });
     } catch (emailError) {
         console.error('[AUTH] Error sending verification email:', emailError);
-        return res.status(500).json({
-            error: 'Il tuo account è stato creato, ma non è stato possibile inviare l\'email di verifica. Prova a richiedere un nuovo invio dalla pagina di login.',
+        // Ritorniamo comunque successo (perché l'utente è stato creato) 
+        // ma con un messaggio che spiega il problema della mail.
+        return res.json({
+            message: 'Account creato con successo! Purtroppo non è stato possibile inviare l\'email di verifica in questo momento. Per favore, prova a richiedere un nuovo invio dalla pagina di Login tra qualche minuto.',
+            warning: 'Errore invio email',
             requires_verification: true
         });
     }

@@ -20,17 +20,13 @@ async function getTransporter() {
     tls: {
       // Do not fail on invalid certs
       rejectUnauthorized: false
-    }
+    },
+    connectionTimeout: 10000, // 10s
+    greetingTimeout: 10000,   // 10s
+    socketTimeout: 15000      // 15s
   });
 
-  try {
-    // Verify connection configuration
-    await transporter.verify();
-    return transporter;
-  } catch (error) {
-    console.error('[EMAIL] Transporter verification failed:', error);
-    throw error;
-  }
+  return transporter;
 }
 
 async function sendEmail({ to, subject, text, html, attachments }) {
