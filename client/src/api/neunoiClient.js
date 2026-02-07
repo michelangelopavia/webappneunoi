@@ -179,7 +179,7 @@ export const neunoi = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, full_name })
-            });
+            }, 45000); // 45s per registrazione ed email
             const data = await handleResponse(res);
             if (data.token) {
                 localStorage.setItem('auth_token', data.token);

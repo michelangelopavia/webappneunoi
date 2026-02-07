@@ -100,12 +100,33 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'La password deve contenere almeno 8 caratteri, tra cui almeno una lettera e un numero.' });
         }
 
+        const existingUser = await User.scope('withPassword').findOne({
+            where: sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), email.toLowerCase().trim())
+        });
+
+        if (existingUser) {
+            if (existingUser.email_verified) {
+                return res.status(400).json({ error: 'Questo indirizzo email è già registrato e verificato. Prova ad accedere.' });
+            }
+
+            // Se non è verificato, rigeneriamo il token e rinviamo la mail
+            const verificationToken = crypto.randomBytes(32).toString('hex');
+            const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+            await existingUser.update({
+                verification_token: verificationToken,
+                verification_token_expires: verificationTokenExpires
+            });
+
+            return await sendVerificationAndRespond(existingUser, verificationToken, res);
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationToken = crypto.randomBytes(32).toString('hex');
         const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 ore
 
         const user = await User.create({
-            email,
+            email: email.toLowerCase().trim(),
             password_hash: hashedPassword,
             full_name,
             role: 'coworker',
@@ -151,7 +172,15 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        // Invia email di verifica
+        return await sendVerificationAndRespond(user, verificationToken, res);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Helper per invio email verifica e risposta uniforme
+async function sendVerificationAndRespond(user, verificationToken, res) {
+    try {
         const { sendEmail } = require('../utils/email');
         const verifyUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/VerifyEmail?token=${verificationToken}`;
 
@@ -171,14 +200,18 @@ router.post('/register', async (req, res) => {
             html: html
         });
 
-        res.json({
+        return res.json({
             message: 'Registrazione completata. Controlla la tua email per verificare l\'account.',
             requires_verification: true
         });
-    } catch (error) {
-        res.status(400).json({ error: error.message });
+    } catch (emailError) {
+        console.error('[AUTH] Error sending verification email:', emailError);
+        return res.status(500).json({
+            error: 'Il tuo account è stato creato, ma non è stato possibile inviare l\'email di verifica. Prova a richiedere un nuovo invio dalla pagina di login.',
+            requires_verification: true
+        });
     }
-});
+}
 
 // GET /auth/verify-email
 router.get('/verify-email', async (req, res) => {
