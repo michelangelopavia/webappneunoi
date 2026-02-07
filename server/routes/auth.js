@@ -93,10 +93,12 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.post('/register', async (req, res) => {
     try {
         const { email, password, full_name } = req.body;
+        console.log(`[AUTH-REG] Tentativo registrazione per: ${email}`);
 
         // Password Complexity Check
         const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
         if (!passwordRegex.test(password)) {
+            console.log(`[AUTH-REG] Password non valida per: ${email}`);
             return res.status(400).json({ error: 'La password deve contenere almeno 8 caratteri, tra cui almeno una lettera e un numero.' });
         }
 
@@ -105,6 +107,7 @@ router.post('/register', async (req, res) => {
         });
 
         if (existingUser) {
+            console.log(`[AUTH-REG] Utente già esistente: ${email}`);
             if (existingUser.email_verified) {
                 return res.status(400).json({ error: 'Questo indirizzo email è già registrato e verificato. Prova ad accedere.' });
             }
@@ -118,6 +121,7 @@ router.post('/register', async (req, res) => {
                 verification_token_expires: verificationTokenExpires
             });
 
+            console.log(`[AUTH-REG] Rinviata mail di verifica a: ${email}`);
             return await sendVerificationAndRespond(existingUser, verificationToken, res);
         }
 
@@ -125,6 +129,7 @@ router.post('/register', async (req, res) => {
         const verificationToken = crypto.randomBytes(32).toString('hex');
         const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 ore
 
+        console.log(`[AUTH-REG] Creazione nuovo utente: ${email}`);
         const user = await User.create({
             email: email.toLowerCase().trim(),
             password_hash: hashedPassword,
@@ -144,6 +149,7 @@ router.post('/register', async (req, res) => {
         });
 
         if (existingProfile) {
+            console.log(`[AUTH-REG] ProfiloCoWorker esistente trovato per: ${email}, unione in corso...`);
             if (!existingProfile.user_id) {
                 await existingProfile.update({
                     user_id: user.id,
@@ -162,6 +168,7 @@ router.post('/register', async (req, res) => {
                 );
             }
         } else {
+            console.log(`[AUTH-REG] Creazione nuovo ProfiloCoWorker per: ${email}`);
             await ProfiloCoworker.create({
                 user_id: user.id,
                 email: email,
@@ -174,6 +181,7 @@ router.post('/register', async (req, res) => {
 
         return await sendVerificationAndRespond(user, verificationToken, res);
     } catch (error) {
+        console.error('[AUTH-REG-ERROR]', error);
         res.status(400).json({ error: error.message });
     }
 });

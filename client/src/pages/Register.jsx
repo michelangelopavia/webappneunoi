@@ -23,7 +23,13 @@ export default function Register() {
 
         try {
             const response = await neunoi.auth.register(email, password, fullName);
-            setSuccess(true);
+            // Se c'è un warning ma l'account è creato, non mostriamo la schermata di successo totale
+            // ma restiamo qui per mostrare il warning
+            if (response.warning) {
+                setSuccess(response);
+            } else {
+                setSuccess(true);
+            }
         } catch (err) {
             setError(err.message || 'Errore durante la registrazione');
         } finally {
@@ -31,7 +37,7 @@ export default function Register() {
         }
     };
 
-    if (success) {
+    if (success === true) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#053c5e] p-4">
                 <Card className="w-full max-w-md text-center">
@@ -103,7 +109,14 @@ export default function Register() {
                             />
                         </div>
                         {error && (
-                            <div className="text-red-500 text-sm font-medium">{error}</div>
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm font-medium">
+                                {error}
+                            </div>
+                        )}
+                        {success && typeof success === 'object' && success.warning && (
+                            <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-md text-sm">
+                                <strong>Attenzione:</strong> {success.message}
+                            </div>
                         )}
                         <Button
                             type="submit"
