@@ -191,41 +191,37 @@ router.post('/register', async (req, res) => {
 });
 
 // Helper per invio email verifica e risposta uniforme
-async function sendVerificationAndRespond(user, verificationToken, res) {
-    try {
-        const { sendEmail } = require('../utils/email');
-        const verifyUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/VerifyEmail?token=${verificationToken}`;
+function sendVerificationAndRespond(user, verificationToken, res) {
+    const { sendEmail } = require('../utils/email');
+    const verifyUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/VerifyEmail?token=${verificationToken}`;
 
-        const html = `
-            <h2>Benvenuto in neu [nòi]!</h2>
-            <p>Ciao ${user.full_name},</p>
-            <p>Grazie per esserti registrato. Per confermare la validità del tuo indirizzo email, clicca sul link qui sotto:</p>
-            <p><a href="${verifyUrl}" style="background-color: #053c5e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Verifica Email</a></p>
-            <p>Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:</p>
-            <p>${verifyUrl}</p>
-            <p>Il link scadrà tra 24 ore.</p>
-        `;
+    const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="https://app.neunoi.it/logo-red.png" alt="neu [nòi]" style="height: 50px;">
+            </div>
+            <h2 style="color: #053c5e; text-align: center;">Benvenuto in neu [nòi]!</h2>
+            <p>Ciao <strong>${user.full_name}</strong>,</p>
+            <p>Grazie per esserti registrato. Per attivare il tuo account e confermare la tua email, clicca sul pulsante qui sotto:</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${verifyUrl}" style="background-color: #1f7a8c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Verifica il mio account</a>
+            </div>
+            <p style="font-size: 14px; color: #666;">Se il pulsante non funziona, copia e incolla questo link nel tuo browser:</p>
+            <p style="font-size: 14px; color: #1f7a8c; word-break: break-all;">${verifyUrl}</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="font-size: 12px; color: #999; text-align: center;">Questo link scadrà tra 24 ore. Se non hai richiesto tu questa iscrizione, puoi ignorare questo messaggio.</p>
+        </div>
+    `;
 
-        await sendEmail({
-            to: user.email,
-            subject: 'Verifica il tuo account - neu [nòi]',
-            html: html
-        });
+    // Invio asincrono (non attendiamo il risultato per rispondere al client)
+    sendEmail({ to: user.email, subject: 'Verifica il tuo account - neu [nòi]', html: html })
+        .then(() => console.log(`[AUTH-ASYNC] Email inviata a ${user.email}`))
+        .catch(err => console.error(`[AUTH-ASYNC-ERROR] Fallito invio a ${user.email}:`, err.message));
 
-        return res.json({
-            message: 'Registrazione completata. Controlla la tua email per verificare l\'account.',
-            requires_verification: true
-        });
-    } catch (emailError) {
-        console.error('[AUTH] Error sending verification email:', emailError);
-        // Ritorniamo comunque successo (perché l'utente è stato creato) 
-        // ma con un messaggio che spiega il problema della mail.
-        return res.json({
-            message: 'Account creato con successo! Purtroppo non è stato possibile inviare l\'email di verifica in questo momento. Per favore, prova a richiedere un nuovo invio dalla pagina di Login tra qualche minuto.',
-            warning: 'Errore invio email',
-            requires_verification: true
-        });
-    }
+    return res.json({
+        message: 'Account creato con successo! Controlla la tua casella di posta (e lo spam) per il link di verifica.',
+        requires_verification: true
+    });
 }
 
 // GET /auth/verify-email

@@ -586,6 +586,30 @@ router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) =>
             await models.TransazioneNEU.destroy({ where: { riferimento_dichiarazione_id: id } });
         }
 
+        // --- GESTIONE CASCATA MANUALE PER USER (Evita Foreign Key Constraints) ---
+        if (modelName === 'User') {
+            console.log(`[DELETE] Eliminazione a cascata per utente ID: ${id}`);
+
+            // 1. Elimina profili collegati
+            await models.ProfiloSocio.destroy({ where: { user_id: id } });
+            // Per il ProfiloCoworker, lo scolleghiamo dall'utente invece di eliminarlo,
+            // così manteniamo lo storico dei check-in ma l'utente "account" sparisce.
+            await models.ProfiloCoworker.update({ user_id: null, stato: 'ospite' }, { where: { user_id: id } });
+
+            // 2. Elimina transazioni se sono di test (o scollega se critiche)
+            // Tipicamente per un'app di gestione, se elimini l'utente elimini le sue transazioni NEU libere
+            await models.TransazioneNEU.destroy({ where: { [Op.or]: [{ da_utente_id: id }, { a_utente_id: id }] } });
+
+            // 3. Elimina altri dati proprietari
+            await models.AbbonamentoUtente.destroy({ where: { user_id: id } });
+            await models.OrdineCoworking.destroy({ where: { user_id: id } });
+            await models.IngressoCoworking.destroy({ where: { user_id: id } });
+            await models.PrenotazioneSala.destroy({ where: { user_id: id } });
+            await models.DichiarazioneVolontariato.destroy({ where: { user_id: id } });
+            await models.TaskNotifica.destroy({ where: { assegnatario_id: id } });
+            await models.TurnoHost.destroy({ where: { utente_id: id } });
+        }
+
         const oldData = { ...item.toJSON() };
         await item.destroy();
 
@@ -597,10 +621,12 @@ router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) =>
             dati_precedenti: oldData
         });
 
-        if (usersToSync.length > 0) {
+        if (usersToSync.length > 0 && modelName !== 'User') {
             const { safeRecalcUser } = require('../utils/safe_recalc');
             for (const uid of [...new Set(usersToSync)]) {
-                await safeRecalcUser(uid);
+                if (uid !== parseInt(id)) { // Non ricalcolare se l'utente non esiste più
+                    await safeRecalcUser(uid);
+                }
             }
         }
         res.json({ message: 'Deleted successfully' });
