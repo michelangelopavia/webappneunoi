@@ -30,7 +30,7 @@ async function getTransporter() {
 }
 
 async function sendEmail({ to, subject, text, html, attachments }) {
-  console.log(`[EMAIL] Tentativo invio a ${to}...`);
+  console.log(`[EMAIL] Tentativo invio a ${to} (Oggetto: ${subject})...`);
   try {
     const transporter = await getTransporter();
     const info = await transporter.sendMail({
@@ -44,8 +44,16 @@ async function sendEmail({ to, subject, text, html, attachments }) {
     console.log(`[EMAIL] Inviata con successo a ${to}: ${info.messageId}`);
     return info;
   } catch (error) {
-    console.error('[EMAIL] Error sending email:', error);
-    throw error;
+    console.error('[EMAIL-ERROR] Dettaglio errore:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack
+    });
+    // Riduciamo l'errore per il client ma manteniamo il codice per debug
+    const diag = error.code ? ` (${error.code})` : '';
+    throw new Error(`${error.message}${diag}`);
   }
 }
 

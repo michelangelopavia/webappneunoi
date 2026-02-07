@@ -31,6 +31,7 @@ export default function Register() {
                 setSuccess(true);
             }
         } catch (err) {
+            console.error('[REGISTRATION-ERROR]', err);
             setError(err.message || 'Errore durante la registrazione');
         } finally {
             setLoading(false);

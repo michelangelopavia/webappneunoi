@@ -181,8 +181,12 @@ router.post('/register', async (req, res) => {
 
         return await sendVerificationAndRespond(user, verificationToken, res);
     } catch (error) {
-        console.error('[AUTH-REG-ERROR]', error);
-        res.status(400).json({ error: error.message });
+        console.error('[AUTH-REG-ERROR] Errore critico:', {
+            message: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+        res.status(400).json({ error: error.message || 'Errore interno durante la registrazione' });
     }
 });
 

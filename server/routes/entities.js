@@ -108,7 +108,13 @@ const checkPermissions = (req, res, next) => {
 };
 
 // Route pubblica per ProfiloCoworker (Guest Check-in)
-router.post('/ProfiloCoworker/filter', async (req, res, next) => {
+router.post('/ProfiloCoworker/filter', (req, res, next) => {
+    // Se l'utente è autenticato, lasciamo che se ne occupi la rotta standard sotto
+    if (req.headers.authorization) {
+        return next('route');
+    }
+    next();
+}, async (req, res, next) => {
     // Limited public access for check-in: only allow searching by email
     const { email } = req.body;
     if (!email) {
