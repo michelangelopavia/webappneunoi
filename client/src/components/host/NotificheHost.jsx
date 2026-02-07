@@ -263,9 +263,9 @@ export default function NotificheHost() {
       const tempoScaduto = oggi > scadenza && durataGiorni >= 7;
 
       let ragioni = [];
-      if (ingressiFiniti) ragioni.push("ingressi esauriti");
-      if (oreSaleFinite) ragioni.push("ore sale esaurite");
-      if (tempoScaduto) ragioni.push("tempo scaduto");
+      if (ingressiFiniti) ragioni.push(`ingressi esauriti (${abb.ingressi_usati}/${abb.ingressi_totali})`);
+      if (oreSaleFinite) ragioni.push(`ore sale esaurite (${abb.ore_sale_usate}/${abb.ore_sale_totali}h)`);
+      if (tempoScaduto) ragioni.push(`scaduto il ${new Date(abb.data_scadenza).toLocaleDateString('it-IT')}`);
 
       const nomeUtente = abb.profilo_nome_completo || 'Socio';
 
@@ -350,10 +350,11 @@ export default function NotificheHost() {
                               {notifica.creato_da_nome && (
                                 <span>Da: <strong>{notifica.creato_da_nome}</strong></span>
                               )}
-                              {notifica.data_inizio && (
+                              {(notifica.data_inizio || notifica.data) && (
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
-                                  {new Date(notifica.data_inizio).toLocaleDateString('it-IT')}
+                                  {notifica.tipo === 'servizio_finito' ? 'Scadenza: ' : ''}
+                                  {new Date(notifica.data_inizio || notifica.data).toLocaleDateString('it-IT')}
                                 </span>
                               )}
                               {notifica.data_fine && (

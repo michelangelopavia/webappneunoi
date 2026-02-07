@@ -140,8 +140,8 @@ export default function ModificaPrenotazione({ open, onOpenChange, prenotazione,
 
             // Gestione crediti
             if (deltaCredito !== 0) {
-                const allAbbonamenti = await neunoi.entities.AbbonamentoUtente.list();
-                const abbonamentiUtente = allAbbonamenti.filter(a => Number(a.user_id) === Number(user.id) && a.attivo);
+                const result = await neunoi.entities.AbbonamentoUtente.filter({ user_id: user.id, attivo: true });
+                const abbonamentiUtente = result;
 
                 if (deltaCredito > 0) {
                     // Sottrai crediti (solo da abbonamenti attivi per data)

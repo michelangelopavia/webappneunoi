@@ -14,6 +14,8 @@ export default function Register() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    const [success, setSuccess] = useState(false);
+
     const handleRegister = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -21,17 +23,39 @@ export default function Register() {
 
         try {
             const response = await neunoi.auth.register(email, password, fullName);
-            if (response.token) {
-                window.location.href = '/Home';
-            } else {
-                setError('Registrazione fallita');
-            }
+            setSuccess(true);
         } catch (err) {
             setError(err.message || 'Errore durante la registrazione');
         } finally {
             setLoading(false);
         }
     };
+
+    if (success) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#053c5e] p-4">
+                <Card className="w-full max-w-md text-center">
+                    <CardHeader>
+                        <CardTitle className="text-2xl font-bold text-[#053c5e]">Registrazione effettuata!</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-slate-600">
+                            Abbiamo inviato un link di verifica all'indirizzo <strong>{email}</strong>.
+                        </p>
+                        <p className="text-sm text-slate-500">
+                            Per favore, controlla la tua casella di posta (e la cartella spam) e clicca sul link per attivare il tuo account.
+                        </p>
+                        <Button
+                            className="w-full bg-[#1f7a8c]"
+                            onClick={() => window.location.href = '/Login'}
+                        >
+                            Vai al Login
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#053c5e] p-4">

@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const sequelize = require('../database');
 const { User, ProfiloCoworker } = require('../models');
 const authMiddleware = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 // POST /auth/login
 router.post('/login', async (req, res) => {
@@ -13,7 +15,7 @@ router.post('/login', async (req, res) => {
         console.log(`[LOGIN] Tentativo di accesso per: ${email}`);
 
         // Case-insensitive search
-        const user = await User.findOne({
+        const user = await User.scope('withPassword').findOne({
             where: sequelize.where(
                 sequelize.fn('LOWER', sequelize.col('email')),
                 email.toLowerCase().trim()
@@ -34,7 +36,23 @@ router.post('/login', async (req, res) => {
 
         if (!isValid) {
             console.warn(`[LOGIN] Password errata per: ${email}`);
+            await logAudit({
+                req,
+                azione: 'failed_login',
+                modello: 'User',
+                riferimento_id: user.id,
+                dati_nuovi: { email }
+            });
             return res.status(401).json({ error: 'Credenziali non valide' });
+        }
+
+        // Verifica se l'email è verificata
+        if (!user.email_verified) {
+            console.warn(`[LOGIN] Email non verificata per: ${email}`);
+            return res.status(403).json({
+                error: 'Devi verificare il tuo indirizzo email prima di poter accedere. Controlla la tua casella di posta.',
+                requires_verification: true
+            });
         }
 
         // Verifica stato approvazione
@@ -52,6 +70,14 @@ router.post('/login', async (req, res) => {
         console.log(`[LOGIN] Accesso autorizzato per: ${email}`);
 
         const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'supersecret', { expiresIn: '7d' });
+
+        await logAudit({
+            req,
+            azione: 'login',
+            modello: 'User',
+            riferimento_id: user.id
+        });
+
         res.json({ token, user });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -67,7 +93,17 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.post('/register', async (req, res) => {
     try {
         const { email, password, full_name } = req.body;
+
+        // Password Complexity Check
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ error: 'La password deve contenere almeno 8 caratteri, tra cui almeno una lettera e un numero.' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 ore
+
         const user = await User.create({
             email,
             password_hash: hashedPassword,
@@ -75,7 +111,10 @@ router.post('/register', async (req, res) => {
             role: 'coworker',
             roles: ['coworker'],
             tipo_utente: 'coworker',
-            status: 'in_attesa'
+            status: 'in_attesa',
+            email_verified: false,
+            verification_token: verificationToken,
+            verification_token_expires: verificationTokenExpires
         });
 
         // Auto-create or Sync ProfiloCoworker
@@ -112,10 +151,68 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'supersecret', { expiresIn: '7d' });
-        res.json({ token, user });
+        // Invia email di verifica
+        const { sendEmail } = require('../utils/email');
+        const verifyUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/VerifyEmail?token=${verificationToken}`;
+
+        const html = `
+            <h2>Benvenuto in neu [nòi]!</h2>
+            <p>Ciao ${user.full_name},</p>
+            <p>Grazie per esserti registrato. Per confermare la validità del tuo indirizzo email, clicca sul link qui sotto:</p>
+            <p><a href="${verifyUrl}" style="background-color: #053c5e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Verifica Email</a></p>
+            <p>Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:</p>
+            <p>${verifyUrl}</p>
+            <p>Il link scadrà tra 24 ore.</p>
+        `;
+
+        await sendEmail({
+            to: user.email,
+            subject: 'Verifica il tuo account - neu [nòi]',
+            html: html
+        });
+
+        res.json({
+            message: 'Registrazione completata. Controlla la tua email per verificare l\'account.',
+            requires_verification: true
+        });
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+// GET /auth/verify-email
+router.get('/verify-email', async (req, res) => {
+    try {
+        const { token } = req.query;
+        if (!token) return res.status(400).json({ error: 'Token mancante' });
+
+        const user = await User.scope('withPassword').findOne({
+            where: {
+                verification_token: token,
+                verification_token_expires: { [Op.gt]: new Date() }
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: 'Token non valido o scaduto' });
+        }
+
+        await user.update({
+            email_verified: true,
+            verification_token: null,
+            verification_token_expires: null
+        });
+
+        await logAudit({
+            req,
+            azione: 'email_verified',
+            modello: 'User',
+            riferimento_id: user.id
+        });
+
+        res.json({ message: 'Email verificata con successo! Ora puoi accedere (previa approvazione admin).' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -138,8 +235,15 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
+        // Password Complexity Check
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({ error: 'La nuova password deve contenere almeno 8 caratteri, tra cui almeno una lettera e un numero.' });
+        }
+
         // Verifica password attuale
-        const isValid = await bcrypt.compare(currentPassword, req.user.password_hash || '');
+        const userWithPass = await User.scope('withPassword').findByPk(req.user.id);
+        const isValid = await bcrypt.compare(currentPassword, userWithPass.password_hash || '');
         if (!isValid) {
             return res.status(401).json({ error: 'Password attuale non corretta' });
         }
@@ -147,9 +251,76 @@ router.post('/change-password', authMiddleware, async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await req.user.update({ password_hash: hashedPassword });
 
+        await logAudit({
+            req,
+            azione: 'change_password',
+            modello: 'User',
+            riferimento_id: req.user.id
+        });
+
         res.json({ message: 'Password aggiornata con successo' });
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+// POST /auth/resend-verification
+router.post('/resend-verification', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email richiesta' });
+
+        const user = await User.findOne({
+            where: sequelize.where(
+                sequelize.fn('LOWER', sequelize.col('email')),
+                email.toLowerCase().trim()
+            )
+        });
+
+        if (!user) {
+            // Per sicurezza non diciamo se l'utente esiste
+            return res.json({ message: 'Se l\'email è presente nei nostri sistemi, riceverai un nuovo link di verifica.' });
+        }
+
+        if (user.email_verified) {
+            return res.status(400).json({ error: 'Questo account è già stato verificato.' });
+        }
+
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await user.update({
+            verification_token: verificationToken,
+            verification_token_expires: verificationTokenExpires
+        });
+
+        const { sendEmail } = require('../utils/email');
+        const verifyUrl = `${process.env.FRONTEND_URL || 'https://app.neunoi.it'}/VerifyEmail?token=${verificationToken}`;
+
+        const html = `
+            <h2>Verifica il tuo account - neu [nòi]</h2>
+            <p>Ciao ${user.full_name},</p>
+            <p>Hai richiesto un nuovo link di verifica per il tuo account. Clicca sul link qui sotto per procedere:</p>
+            <p><a href="${verifyUrl}" style="background-color: #053c5e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Verifica Email</a></p>
+            <p>Il link scadrà tra 24 ore.</p>
+        `;
+
+        await sendEmail({
+            to: user.email,
+            subject: 'Nuovo link di verifica account - neu [nòi]',
+            html: html
+        });
+
+        await logAudit({
+            req,
+            azione: 'resend_verification',
+            modello: 'User',
+            riferimento_id: user.id
+        });
+
+        res.json({ message: 'Se l\'email è presente nei nostri sistemi, riceverai un nuovo link di verifica.' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -212,6 +383,12 @@ router.post('/reset-password', async (req, res) => {
     try {
         const { token, newPassword } = req.body;
         if (!token || !newPassword) return res.status(400).json({ error: 'Token e nuova password richiesti' });
+
+        // Password Complexity Check
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({ error: 'La nuova password deve contenere almeno 8 caratteri, tra cui almeno una lettera e un numero.' });
+        }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecret');
         if (decoded.purpose !== 'password_reset') throw new Error('Token non valido per il reset');

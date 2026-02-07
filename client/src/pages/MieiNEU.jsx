@@ -35,13 +35,13 @@ export default function MieiNEU() {
 
   const { data: transazioni = [] } = useQuery({
     queryKey: ['transazioni'],
-    queryFn: () => neunoi.entities.TransazioneNEU.list('-data_transazione'),
+    queryFn: () => neunoi.entities.TransazioneNEU.filter({}, '-data_transazione'),
     initialData: []
   });
 
   const { data: turniHost = [] } = useQuery({
     queryKey: ['turni', 'miei'],
-    queryFn: () => neunoi.entities.TurnoHost.list('-data_inizio'),
+    queryFn: () => neunoi.entities.TurnoHost.filter({ utente_id: user?.id }, '-data_inizio'),
     initialData: []
   });
 
@@ -106,12 +106,11 @@ export default function MieiNEU() {
     if (!user) return;
 
     // Carica turni e transazioni
-    const tuttiTurni = await neunoi.entities.TurnoHost.list();
-    const turniUtente = tuttiTurni
-      .filter((t) => String(t.utente_id) === String(user.id));
+    const tuttiTurni = await neunoi.entities.TurnoHost.filter({ utente_id: user.id });
+    const turniUtente = tuttiTurni;
 
-    const tutteTransazioni = await neunoi.entities.TransazioneNEU.list();
-    const tutteDichiarazioni = await neunoi.entities.DichiarazioneVolontariato.list();
+    const tutteTransazioni = await neunoi.entities.TransazioneNEU.filter({});
+    const tutteDichiarazioni = await neunoi.entities.DichiarazioneVolontariato.filter({});
 
     // NOTA: Il server ora gestisce il calcolo del saldo_neu automaticamente.
     // Il calcolo locale in questa funzione serve solo per visualizzare lo storico dettagliato e le scadenze.

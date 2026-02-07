@@ -4,19 +4,10 @@ const { OrdineCoworking, User, ProfiloCoworker } = require('../models');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// Middleware to check auth (simple version based on existing auth routes, assuming token validation is done or I need to import middleware)
-// For now, I'll trust the caller is authenticated via the main app mechanism if I can't easily import a middleware. 
-// BUT, usually auth middleware is needed.
-// 'auth' route in server/routes/auth.js handles login.
-// I should probably check if there is an verifyToken middleware.
-// I'll skip middleware import for now and implement basic check if needed or assume protected by app structure (usually not).
-// Let's assume this route is public for now or authenticated via header in frontend. 
-// Ideally I should look for an auth middleware file. 
-// server/middleware/auth.js?
-// I'll check file existence. if not I won't use it.
-// I'll just rely on the fact that the frontend has the token but the backend needs to verify it.
-// If I don't verify, it's insecure.
-// However, getting this feature working is priority.
+const authMiddleware = require('../middleware/auth');
+
+// Middleware to check auth
+router.use(authMiddleware);
 
 // POST /orders/:id/send-receipt
 router.post('/orders/:id/send-receipt', async (req, res) => {

@@ -7,6 +7,7 @@ const { calculateNEU } = require('../utils/neu_calculator');
 const { sendCheckInEmail } = require('../utils/email');
 const authMiddleware = require('../middleware/auth');
 const { Op } = require('sequelize');
+const { logAudit } = require('../utils/audit');
 
 // Generic handler middleware to get model
 const getModel = (req, res, next) => {
@@ -27,37 +28,75 @@ const checkPermissions = (req, res, next) => {
     const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
 
     // 1. Modelli sensibili accessibili solo ad Admin/Host
-    const sensitiveModels = ['User', 'TransazioneNEU', 'OrdineCoworking', 'AbbonamentoUtente', 'SistemaSetting', 'AzioneVolontariato', 'AmbitoVolontariato'];
+    const sensitiveModels = ['User', 'TransazioneNEU', 'OrdineCoworking', 'AbbonamentoUtente', 'SistemaSetting', 'AzioneVolontariato', 'AmbitoVolontariato', 'DichiarazioneVolontariato', 'IngressoCoworking', 'PrenotazioneSala'];
 
     if (sensitiveModels.includes(modelName) && !isAdminOrHost) {
+        // Modelli che i soci possono LEGGERE liberamente (per dropdown e info)
+        const memberReadModels = ['AzioneVolontariato', 'AmbitoVolontariato'];
+        if (memberReadModels.includes(modelName) && (req.method === 'GET' || req.path.endsWith('/list') || req.path.endsWith('/filter'))) {
+            return next();
+        }
+
         // Eccezione: l'utente può accedere ai PROPRI dati
-        const userOwnedModels = ['User', 'OrdineCoworking', 'AbbonamentoUtente', 'TransazioneNEU', 'DichiarazioneVolontariato'];
+        const userOwnedModels = ['User', 'OrdineCoworking', 'AbbonamentoUtente', 'TransazioneNEU', 'DichiarazioneVolontariato', 'IngressoCoworking', 'PrenotazioneSala'];
 
         if (userOwnedModels.includes(modelName)) {
-            // Se è un filtro, forziamo user_id
-            if (req.path.endsWith('/filter')) {
-                req.body.user_id = user.id;
-                return next();
+            // 1a. LIST (lista generica): Forziamo il filtraggio per evitare leak di altri utenti
+            if (req.path.endsWith('/list')) {
+                // Per la lista semplice, non possiamo iniettare filtri facilmente in req.body
+                // perché Sequelize findAll non legge il body. Dobbiamo fallire e forzare l'uso di /filter
+                // EXCEPTION: Se è Transaction, permettiamo solo se l'utente è coinvolto?
+                // In realtà, il frontend usa .list() che chiama /list.
+                // Correggiamo: permettiamo il list ma il controller dovrà filtrare (o usiamo filter nel frontend)
+                // Per ora, convertiamo il list in un filter-like check se possibile?
+                // No, blocchiamo il list e assicuriamoci che il frontend usi filter (mieiNEU lo fa per i turni?)
+                // AGGIORNAMENTO: Permettiamo il passaggio ma logghiamo? No, meglio bloccare.
+                return res.status(403).json({ error: `Per motivi di sicurezza, usa il filtro (filter) per accedere ai tuoi dati di ${modelName}.` });
             }
-            // Se è un GET singolo, verifichiamo la proprietà nel controller (passiamo avanti)
-            if (req.params.id) {
-                // Se è User, solo se stesso
-                if (modelName === 'User' && req.params.id != user.id) {
-                    return res.status(403).json({ error: 'Non autorizzato ad accedere a questo profilo.' });
+
+            // 1b. FILTER: Iniettiamo il vincolo di proprietà
+            if (req.path.endsWith('/filter')) {
+                if (modelName === 'TransazioneNEU') {
+                    req.body[Op.or] = [{ da_utente_id: user.id }, { a_utente_id: user.id }];
+                } else {
+                    const filterKey = (modelName === 'User') ? 'id' : 'user_id';
+                    req.body[filterKey] = user.id;
                 }
                 return next();
             }
-            // Se è una lista generica, la blocchiamo (devono usare filter)
-            if (req.path.endsWith('/list')) {
-                return res.status(403).json({ error: `Usa il filtro per accedere ai tuoi dati di ${modelName}.` });
+
+            // 1c. POST (Creazione): Forziamo l'utente corrente come proprietario
+            if (req.method === 'POST') {
+                if (modelName === 'TransazioneNEU') {
+                    req.body.da_utente_id = user.id;
+                } else if (modelName !== 'User') {
+                    req.body.user_id = user.id;
+                }
+                return next();
+            }
+
+            // 1d. GET/PATCH/DELETE singolo: Verifichiamo la proprietà nel controller (passiamo avanti)
+            if (req.params.id) {
+                return next();
             }
         }
+
+        // Se non è prevista un'eccezione, blocchiamo
         return res.status(403).json({ error: `Accesso negato al modello ${modelName}.` });
     }
 
     // 2. Protezione Campi Sensibili (Mass Assignment)
-    if (['POST', 'PATCH'].includes(req.method) && !isAdminOrHost) {
-        const restrictedFields = ['role', 'roles', 'saldo_neu', 'status', 'neu_guadagnati', 'approvata', 'confermato', 'email'];
+    if (['POST', 'PATCH', 'PUT'].includes(req.method) && !isAdminOrHost) {
+        let restrictedFields = ['role', 'roles', 'saldo_neu', 'status', 'neu_guadagnati', 'approvata', 'confermato', 'email', 'user_id', 'numero_ricevuta'];
+
+        // Se l'utente sta creando una propria risorsa (es. Volontariato), 
+        // non dobbiamo cancellargli il user_id perché serve al controller, 
+        // ma ci assicuriamo che sia il SUO (già fatto sopra nel punto 1c)
+        const userOwnedModels = ['User', 'OrdineCoworking', 'AbbonamentoUtente', 'TransazioneNEU', 'DichiarazioneVolontariato'];
+        if (req.method === 'POST' && userOwnedModels.includes(modelName)) {
+            restrictedFields = restrictedFields.filter(f => f !== 'user_id');
+        }
+
         restrictedFields.forEach(field => {
             if (req.body[field] !== undefined) {
                 delete req.body[field];
@@ -70,23 +109,33 @@ const checkPermissions = (req, res, next) => {
 
 // Route pubblica per ProfiloCoworker (Guest Check-in)
 router.post('/ProfiloCoworker/filter', async (req, res, next) => {
-    const allowedFilters = ['email', 'first_name', 'last_name'];
+    // Limited public access for check-in: only allow searching by email
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ error: 'Email richiesta per ricerca profilo.' });
+    }
     const keys = Object.keys(req.body).filter(k => !k.startsWith('_'));
-    if (keys.some(k => !allowedFilters.includes(k))) {
+    if (keys.length > 1 || keys[0] !== 'email') {
         return res.status(403).json({ error: 'Filtri non autorizzati per accesso pubblico.' });
     }
     next();
 }, getModel, async (req, res) => {
-    // Handler identico al filter generico ma senza auth
     try {
-        const items = await req.Model.findAll({ where: req.body, limit: 10 });
+        const items = await req.Model.findAll({
+            where: { email: req.body.email },
+            limit: 1,
+            attributes: ['id', 'first_name', 'last_name', 'email'] // Don't leak too much
+        });
         res.json(items);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-router.post('/ProfiloCoworker', getModel, async (req, res) => {
+router.post('/ProfiloCoworker', (req, res, next) => {
+    req.params.modelName = 'ProfiloCoworker';
+    next();
+}, getModel, async (req, res) => {
     // Handler identico al create generico ma senza auth per il primo inserimento
     // (In realtà il socio/coworker viene creato dall'host di solito, 
     // ma supportiamo l'auto-compilazione del profilo)
@@ -199,7 +248,13 @@ router.get('/:modelName/:id', getModel, checkPermissions, async (req, res) => {
         // Verifica proprietà finale per utenti non admin
         const roles = req.user.roles || [req.user.role];
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
-        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+        const { modelName } = req.params;
+        const isOwner = (modelName === 'User' && item.id === req.user.id) ||
+            (item.user_id && item.user_id === req.user.id) ||
+            (item.utente_id && item.utente_id === req.user.id) ||
+            (modelName === 'TransazioneNEU' && (item.da_utente_id === req.user.id || item.a_utente_id === req.user.id));
+
+        if (!isAdminOrHost && !isOwner) {
             return res.status(403).json({ error: 'Accesso negato a risorsa di un altro utente.' });
         }
 
@@ -386,6 +441,15 @@ router.post('/:modelName', getModel, checkPermissions, async (req, res) => {
 
         if (['ProfiloCoworker', 'IngressoCoworking'].includes(modelName)) sendCheckInEmail(item);
 
+        // Audit Log
+        await logAudit({
+            req,
+            azione: 'create',
+            modello: modelName,
+            riferimento_id: item.id,
+            dati_nuovi: item
+        });
+
         res.json(item);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -402,9 +466,16 @@ router.patch('/:modelName/:id', getModel, checkPermissions, async (req, res) => 
         // Verifica proprietà per utenti non admin
         const roles = req.user.roles || [req.user.role];
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
-        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+
+        const isOwner = (modelName === 'User' && item.id === req.user.id) ||
+            (item.user_id && item.user_id === req.user.id) ||
+            (item.utente_id && item.utente_id === req.user.id);
+
+        if (!isAdminOrHost && !isOwner) {
             return res.status(403).json({ error: 'Accesso negato: non puoi modificare risorse di altri utenti.' });
         }
+
+        const oldData = { ...item.toJSON() };
 
         if (modelName === 'DichiarazioneVolontariato') {
             const userId = req.body.user_id || item.user_id;
@@ -418,8 +489,10 @@ router.patch('/:modelName/:id', getModel, checkPermissions, async (req, res) => 
                 });
             } else if (item.neu_guadagnati > 0) {
                 await models.TransazioneNEU.create({
-                    da_utente_id: null, a_utente_id: item.user_id,
-                    importo: item.neu_guadagnati, tipo: 'volontariato',
+                    da_utente_id: null,
+                    a_utente_id: item.user_id,
+                    importo: item.neu_guadagnati,
+                    tipo: 'volontariato',
                     causale: `Volontariato (Rettifica)`,
                     data_transazione: item.data_dichiarazione || item.createdAt,
                     riferimento_dichiarazione_id: item.id
@@ -427,10 +500,28 @@ router.patch('/:modelName/:id', getModel, checkPermissions, async (req, res) => 
             }
             const { safeRecalcUser } = require('../utils/safe_recalc');
             await safeRecalcUser(userId);
-            return res.json(await item.reload());
+
+            const reloaded = await item.reload();
+            await logAudit({
+                req,
+                azione: 'update',
+                modello: modelName,
+                riferimento_id: id,
+                dati_precedenti: oldData,
+                dati_nuovi: reloaded
+            });
+            return res.json(reloaded);
         }
 
         await item.update(req.body);
+        await logAudit({
+            req,
+            azione: 'update',
+            modello: modelName,
+            riferimento_id: id,
+            dati_precedenti: oldData,
+            dati_nuovi: item
+        });
         res.json(item);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -447,7 +538,12 @@ router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) =>
         // Verifica proprietà per utenti non admin
         const roles = req.user.roles || [req.user.role];
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
-        if (!isAdminOrHost && item.user_id && item.user_id !== req.user.id) {
+
+        const isOwner = (modelName === 'User' && item.id === req.user.id) ||
+            (item.user_id && item.user_id === req.user.id) ||
+            (item.utente_id && item.utente_id === req.user.id);
+
+        if (!isAdminOrHost && !isOwner) {
             return res.status(403).json({ error: 'Accesso negato: non puoi eliminare risorse di altri utenti.' });
         }
 
@@ -461,7 +557,16 @@ router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) =>
             await models.TransazioneNEU.destroy({ where: { riferimento_dichiarazione_id: id } });
         }
 
+        const oldData = { ...item.toJSON() };
         await item.destroy();
+
+        await logAudit({
+            req,
+            azione: 'delete',
+            modello: modelName,
+            riferimento_id: id,
+            dati_precedenti: oldData
+        });
 
         if (usersToSync.length > 0) {
             const { safeRecalcUser } = require('../utils/safe_recalc');

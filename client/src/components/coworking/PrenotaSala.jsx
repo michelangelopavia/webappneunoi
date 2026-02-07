@@ -167,8 +167,7 @@ export default function PrenotaSala({ user, abbonamenti = [] }) {
       const oreCredito = data.tipo_utilizzo === 'call' ? durataOre * 0.5 : durataOre;
 
       // Verifica crediti disponibili (max 2h extra) - somma di tutti gli abbonamenti
-      const allAbbonamenti = await neunoi.entities.AbbonamentoUtente.list();
-      const miAbbonamenti = allAbbonamenti.filter(a => Number(a.user_id) === Number(user.id));
+      const miAbbonamenti = await neunoi.entities.AbbonamentoUtente.filter({ user_id: user.id });
 
       const abbonamentiAttivi = miAbbonamenti.filter(a => {
         if (!a.attivo) return false;

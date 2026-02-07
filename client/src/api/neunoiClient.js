@@ -202,6 +202,21 @@ export const neunoi = {
             });
             return handleResponse(res);
         },
+        verifyEmail: async (token) => {
+            const res = await fetchWithTimeout(`${API_URL}/auth/verify-email?token=${token}`, {
+                method: 'GET',
+                headers: getHeaders()
+            });
+            return handleResponse(res);
+        },
+        resendVerification: async (email) => {
+            const res = await fetchWithTimeout(`${API_URL}/auth/resend-verification`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ email })
+            });
+            return handleResponse(res);
+        },
         me: async () => {
             const res = await fetchWithTimeout(`${API_URL}/auth/me`, {
                 headers: getHeaders()

@@ -17,8 +17,49 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const helmet = require('helmet');
 
+if (!process.env.JWT_SECRET) {
+    console.warn('[SECURITY WARNING] JWT_SECRET is not set! Using default secret is insecure for production.');
+}
+const rateLimit = require('express-rate-limit');
+
 // Basic Security Headers
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:", "https://*"],
+            connectSrc: ["'self'", "https://*"]
+        }
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
+}));
+
+// Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again later.'
+});
+app.use(limiter);
+
+// Auth Middleware and Admin Check for index.js routes
+const authMiddleware = require('./middleware/auth');
+const adminOnly = (req, res, next) => {
+    const roles = req.user?.roles || [req.user?.role];
+    if (roles.some(r => ['admin', 'super_admin'].includes(r))) {
+        return next();
+    }
+    res.status(403).json({ error: 'Accesso negato. Solo amministratori.' });
+};
 
 // Middleware
 const allowedOrigins = [
@@ -57,7 +98,24 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+// Rate limiters for specific routes
+const authLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // Limit each IP to 10 register/forgot-password requests per hour
+    message: 'Too many accounts created from this IP, please try again after an hour.'
+});
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit each IP to 20 login attempts per 15 minutes
+    message: 'Too many login attempts, please try again later.'
+});
+
 // Routes
+app.use('/auth/login', loginLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/auth/forgot-password', authLimiter);
+
 app.use('/auth', require('./routes/auth'));
 app.use('/api/entities', require('./routes/entities'));
 app.use('/api/integrations', require('./routes/integrations'));
@@ -67,7 +125,7 @@ app.use('/api/coworking', require('./routes/coworking'));
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/temp/' });
 
-app.post('/api/admin/restore-db', upload.single('database'), async (req, res) => {
+app.post('/api/admin/restore-db', authMiddleware, adminOnly, upload.single('database'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
 
@@ -103,7 +161,7 @@ app.post('/api/admin/restore-db', upload.single('database'), async (req, res) =>
     }
 });
 
-app.get('/api/backup-database-neunoi', (req, res) => {
+app.get('/api/backup-database-neunoi', authMiddleware, adminOnly, (req, res) => {
     const dbPath = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
     if (fs.existsSync(dbPath)) {
         res.download(dbPath, `backup_database_${new Date().toISOString().split('T')[0]}.sqlite`);
@@ -112,7 +170,7 @@ app.get('/api/backup-database-neunoi', (req, res) => {
     }
 });
 
-app.post('/api/users/:id/recalc', async (req, res) => {
+app.post('/api/users/:id/recalc', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { id } = req.params;
         const { safeRecalcUser } = require('./utils/safe_recalc');
@@ -125,7 +183,7 @@ app.post('/api/users/:id/recalc', async (req, res) => {
     }
 });
 
-app.get('/api/run-safe-recalc-neunoi', async (req, res) => {
+app.get('/api/run-safe-recalc-neunoi', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { User } = require('./models');
         const { safeRecalcUser } = require('./utils/safe_recalc');
@@ -147,7 +205,14 @@ app.get('/api/run-safe-recalc-neunoi', async (req, res) => {
     }
 });
 
-app.get('/api/run-migration-neunoi', async (req, res) => {
+app.get('/api/run-migration-neunoi', (req, res, next) => {
+    // In local development, bypass auth and admin checks to allow browser-trigger
+    if (process.env.NODE_ENV !== 'production') return next();
+    return authMiddleware(req, res, (err) => {
+        if (err) return next(err);
+        adminOnly(req, res, next);
+    });
+}, async (req, res) => {
     try {
         const { OrdineCoworking } = require('./models');
         const sequelize = require('./database');
@@ -174,14 +239,32 @@ app.get('/api/run-migration-neunoi', async (req, res) => {
             await order.update({ numero_ricevuta: years[year] });
         }
 
-        res.send(`<h1>Migrazione completata!</h1><p>Aggiornati ${orders.length} ordini con la numerazione sequenziale.</p>`);
+        // 2. Verifica utenti esistenti (Email Verification Migration)
+        const { User } = require('./models');
+        const { logAudit } = require('./utils/audit');
+        const updatedUsersCount = await User.update(
+            { email_verified: true },
+            { where: { email_verified: false } }
+        );
+
+        await logAudit({
+            req,
+            azione: 'migration_verify_existing_users',
+            modello: 'User',
+            riferimento_id: 0,
+            dati_nuovi: { count: updatedUsersCount[0] }
+        });
+
+        res.send(`<h1>Migrazione completata!</h1>
+            <p>Aggiornati ${orders.length} ordini con la numerazione sequenziale.</p>
+            <p>Verificati ${updatedUsersCount[0]} utenti esistenti.</p>`);
     } catch (e) {
         console.error('[MIGRATION] Error:', e);
         res.status(500).send(`<h1>Errore durante la migrazione</h1><pre>${e.message}</pre>`);
     }
 });
 
-app.get('/api/system-diag', async (req, res) => {
+app.get('/api/system-diag', authMiddleware, adminOnly, async (req, res) => {
     try {
         const { User, AbbonamentoUtente, OrdineCoworking, ProfiloSocio, ProfiloCoworker, TransazioneNEU } = require('./models');
         const counts = {
@@ -224,6 +307,28 @@ const { User } = require('./models');
 sequelize.sync({ force: false }).then(async () => {
     console.log('Database synced');
 
+    // Manual SQL Migration for SQLite (since alter:true is failing)
+    try {
+        const queryInterface = sequelize.getQueryInterface();
+        const [results] = await sequelize.query("PRAGMA table_info(Users);");
+        const columns = results.map(r => r.name);
+
+        if (!columns.includes('email_verified')) {
+            await sequelize.query("ALTER TABLE Users ADD COLUMN email_verified BOOLEAN DEFAULT 0;");
+            console.log('[MIGRATION] Added email_verified');
+        }
+        if (!columns.includes('verification_token')) {
+            await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token TEXT;");
+            console.log('[MIGRATION] Added verification_token');
+        }
+        if (!columns.includes('verification_token_expires')) {
+            await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token_expires DATETIME;");
+            console.log('[MIGRATION] Added verification_token_expires');
+        }
+    } catch (err) {
+        console.warn('[MIGRATION] Column check/add failed (might already be ok):', err.message);
+    }
+
     // Seed default admin if no users exist
     const userCount = await User.count();
     if (userCount === 0) {
@@ -234,9 +339,22 @@ sequelize.sync({ force: false }).then(async () => {
             full_name: 'Admin NEU',
             role: 'super_admin',
             roles: ['super_admin', 'admin', 'socio'],
+            status: 'approvato',
+            email_verified: true,
             saldo_neu: 0
         });
         console.log('Default admin created: admin@neu.noi / password123');
+    } else {
+        // Forza verifica per admin esistente se necessario (solo per sblocco locale)
+        await User.update(
+            { email_verified: true, status: 'approvato' },
+            { where: { email: 'admin@neu.noi' } }
+        );
+        // Opzionale: sblocca tutti in locale se vuoi evitare noie
+        if (process.env.NODE_ENV !== 'production') {
+            await User.update({ email_verified: true }, { where: { email_verified: false } });
+            console.log('[DEBUG] Tutti gli utenti locali sono stati segnati come verificati.');
+        }
     }
 
     // Seed "Altro" Ambito if missing

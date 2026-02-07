@@ -32,6 +32,7 @@ import Login from "./Login";
 import Register from "./Register";
 import ForgotPassword from "./ForgotPassword";
 import ResetPassword from "./ResetPassword";
+import VerifyEmail from "./VerifyEmail";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -69,6 +70,7 @@ const PAGES = {
     Register: Register,
     ForgotPassword: ForgotPassword,
     ResetPassword: ResetPassword,
+    VerifyEmail: VerifyEmail,
 
 }
 
@@ -129,6 +131,7 @@ function PagesContent() {
                 <Route path="/Register" element={<Register />} />
                 <Route path="/ForgotPassword" element={<ForgotPassword />} />
                 <Route path="/ResetPassword" element={<ResetPassword />} />
+                <Route path="/VerifyEmail" element={<VerifyEmail />} />
 
             </Routes>
         </Layout>

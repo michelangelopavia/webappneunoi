@@ -7,17 +7,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { LogIn } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 
+import { toast } from 'sonner';
+
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [searchParams] = useSearchParams();
+    const [showResend, setShowResend] = useState(false);
+    const [resending, setResending] = useState(false);
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setShowResend(false);
 
         try {
             const response = await neunoi.auth.login(email, password);
@@ -29,8 +34,25 @@ export default function Login() {
             }
         } catch (err) {
             setError(err.message || 'Errore durante il login');
+            // Check if error is due to missing verification
+            if (err.message?.includes('verificare') || err.requires_verification) {
+                setShowResend(true);
+            }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResend = async () => {
+        setResending(true);
+        try {
+            const res = await neunoi.auth.resendVerification(email);
+            toast.success(res.message || 'Email inviata con successo');
+            setShowResend(false);
+        } catch (err) {
+            toast.error(err.message || 'Errore durante l\'invio');
+        } finally {
+            setResending(false);
         }
     };
 
@@ -68,7 +90,20 @@ export default function Login() {
                             />
                         </div>
                         {error && (
-                            <div className="text-red-500 text-sm font-medium">{error}</div>
+                            <div className="space-y-2">
+                                <div className="text-red-500 text-sm font-medium">{error}</div>
+                                {showResend && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full text-[#1f7a8c] border-[#1f7a8c] hover:bg-slate-50"
+                                        onClick={handleResend}
+                                        disabled={resending}
+                                    >
+                                        {resending ? 'Invio in corso...' : 'Invia di nuovo email di verifica'}
+                                    </Button>
+                                )}
+                            </div>
                         )}
                         <Button
                             type="submit"

@@ -62,7 +62,7 @@ export default function Volontariato() {
 
   const { data: dichiarazioni = [] } = useQuery({
     queryKey: ['dichiarazioni_volontariato'],
-    queryFn: () => neunoi.entities.DichiarazioneVolontariato.list('-data_dichiarazione'),
+    queryFn: () => neunoi.entities.DichiarazioneVolontariato.filter({}, '-data_dichiarazione'),
     initialData: []
   });
 

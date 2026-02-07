@@ -1,8 +1,9 @@
 node_modules
 .env
-dist
-build
-cp_backup
+dist/
+build/
+*.sqlite
+cp_backup/
 backups/
 server/backups/
 server/uploads/
@@ -10,4 +11,5 @@ Feedback/extracted_docx/
 Feedback/Sicurezza.zip
 server/migrate_*.js
 server/*_database.sqlite
+.DS_Store
 

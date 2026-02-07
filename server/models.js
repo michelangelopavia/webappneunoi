@@ -18,8 +18,25 @@ const User = sequelize.define('User', {
     note: { type: DataTypes.TEXT },
     telefono: { type: DataTypes.STRING },
     data_iscrizione: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-    tipo_utente: { type: DataTypes.STRING } // socio, coworker, both
+    tipo_utente: { type: DataTypes.STRING }, // socio, coworker, both
+    email_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
+    verification_token: { type: DataTypes.STRING, allowNull: true },
+    verification_token_expires: { type: DataTypes.DATE, allowNull: true }
+}, {
+    defaultScope: {
+        attributes: { exclude: ['password_hash', 'verification_token'] }
+    },
+    scopes: {
+        withPassword: { attributes: {} }
+    }
 });
+
+// Add toJSON to ensure it's always removed even if scope is bypassed
+User.prototype.toJSON = function () {
+    const values = { ...this.get() };
+    delete values.password_hash;
+    return values;
+};
 
 const ProfiloSocio = sequelize.define('ProfiloSocio', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -292,6 +309,19 @@ module.exports = {
         chiave: { type: DataTypes.STRING, unique: true },
         valore: { type: DataTypes.TEXT },
         descrizione: { type: DataTypes.STRING }
+    }),
+
+    AuditLog: sequelize.define('AuditLog', {
+        id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+        user_id: { type: DataTypes.INTEGER, allowNull: true },
+        user_name: { type: DataTypes.STRING },
+        azione: { type: DataTypes.STRING }, // 'create', 'update', 'delete', 'login', etc.
+        modello: { type: DataTypes.STRING },
+        riferimento_id: { type: DataTypes.INTEGER },
+        dati_precedenti: { type: DataTypes.JSON },
+        dati_nuovi: { type: DataTypes.JSON },
+        ip_address: { type: DataTypes.STRING },
+        data_esecuzione: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
     })
 };
 
@@ -345,3 +375,6 @@ m.PrenotazioneSala.belongsTo(m.SalaRiunioni, { foreignKey: 'sala_id' });
 // Abbonamento relationships
 m.TipoAbbonamento.hasMany(m.AbbonamentoUtente, { foreignKey: 'tipo_abbonamento_id' });
 m.AbbonamentoUtente.belongsTo(m.TipoAbbonamento, { foreignKey: 'tipo_abbonamento_id', as: 'TipoAbbonamento' });
+
+m.User.hasMany(m.AuditLog, { foreignKey: 'user_id' });
+m.AuditLog.belongsTo(m.User, { foreignKey: 'user_id' });

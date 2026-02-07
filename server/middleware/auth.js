@@ -13,7 +13,10 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ error: 'Invalid token format' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecret');
+        const secret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'supersecret' : null);
+        if (!secret) throw new Error('JWT_SECRET not configured');
+
+        const decoded = jwt.verify(token, secret);
         const user = await User.findByPk(decoded.userId);
 
         if (!user) {

@@ -18,6 +18,16 @@ const upload = multer({ storage: storage });
 
 router.use(authMiddleware);
 
+const adminOnly = (req, res, next) => {
+    const roles = req.user?.roles || [req.user?.role];
+    if (roles.some(r => ['admin', 'super_admin', 'host'].includes(r))) {
+        return next();
+    }
+    res.status(403).json({ error: 'Accesso negato. Solo amministratori o host.' });
+};
+
+router.use(adminOnly);
+
 // POST /api/integrations/upload
 router.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
@@ -115,7 +125,7 @@ router.post('/extract', async (req, res) => {
         const headers = rawHeaders.map(h => {
             const trimmed = h.replace(/^"|"$/g, '').trim();
             if (trimmed.includes(':')) return trimmed.split(':')[0];
-            if (trimmed.includes('.')) return trimmed.split(':')[0]; // Fixed from .split('.')[0] for safety
+            if (trimmed.includes('.')) return trimmed.split('.')[0];
             return trimmed;
         });
 
@@ -127,12 +137,18 @@ router.post('/extract', async (req, res) => {
                 let val = values[index] || '';
                 val = val.replace(/^"|"$/g, '').trim();
 
-                // Convert Booleans
+                // Convert Booleans ONLY if they look like booleans or are specific boolean fields
+                const booleanFields = ['attivo', 'privacy_accettata', 'newsletter', 'confermato', 'completato', 'pagato', 'solo_staff', 'is_collettivo'];
+
                 if (val.toLowerCase() === 'true' || val === '1') {
                     obj[h] = true;
-                } else if (val.toLowerCase() === 'false' || val === '0' || val === '') {
-                    if (h === 'attivo' && val === '') obj[h] = true;
-                    else obj[h] = false;
+                } else if (val.toLowerCase() === 'false' || val === '0') {
+                    obj[h] = false;
+                } else if (val === '' && booleanFields.includes(h)) {
+                    // Default for empty boolean fields
+                    obj[h] = (h === 'attivo'); // 'attivo' defaults to true, others to false
+                } else if (val === '') {
+                    obj[h] = ''; // Keep as empty string for text fields, cleaner for frontend to handle
                 } else {
                     obj[h] = val;
                 }

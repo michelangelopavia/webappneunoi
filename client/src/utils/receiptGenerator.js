@@ -110,10 +110,12 @@ export const generateRicevutaPDF = async (ordine, user, profiloOverride = null) 
         })();
 
         prodotti.forEach(prod => {
-            const nome = prod.tipo_abbonamento_nome || prod.nome_prodotto || prod.nome || 'Servizio';
-            doc.text(nome || '', 20, yPos);
+            const nome = (prod.tipo_abbonamento_nome || prod.nome_prodotto || prod.nome || 'Servizio');
+            const quantita = prod.quantita > 1 ? ` (x${prod.quantita})` : '';
+            doc.text(`${nome}${quantita}`, 20, yPos);
 
-            const prezzo = prod.prezzo_totale || prod.prezzo || ordine.totale;
+            const prezzo = prod.prezzo_totale !== undefined ? prod.prezzo_totale : (prod.prezzo || ordine.totale);
+            doc.text(`€ ${prezzo.toFixed(2)}`, pageWidth - 20, yPos, { align: 'right' });
             yPos += 8;
         });
 

@@ -25,7 +25,9 @@ export default function GestioneOrdini() {
     profilo_email: '',
     data_ordine: new Date().toISOString().split('T')[0],
     metodo_pagamento: 'non_pagato',
-    note: ''
+    note: '',
+    sconto_tipo: 'percentuale', // 'percentuale' o 'fisso'
+    sconto_valore: 0
   });
   const [prodotti, setProdotti] = useState([{
     tipo_abbonamento_id: '',
@@ -89,7 +91,7 @@ export default function GestioneOrdini() {
         const tipo = tipiAbbonamento.find(t => String(t.id) === String(p.tipo_abbonamento_id));
         if (!tipo) throw new Error("Tipo abbonamento non trovato");
 
-        const prezzoUnitario = tipo.prezzo_libero && p.prezzo_custom ? (parseFloat(p.prezzo_custom) || 0) : (tipo.prezzo || 0);
+        const prezzoUnitario = p.prezzo_custom ? (parseFloat(p.prezzo_custom) || 0) : (tipo.prezzo || 0);
         return {
           tipo_abbonamento_id: p.tipo_abbonamento_id,
           tipo_abbonamento_nome: tipo.nome,
@@ -99,7 +101,25 @@ export default function GestioneOrdini() {
         };
       });
 
-      const totale = prodottiConPrezzo.reduce((sum, p) => sum + p.prezzo_totale, 0);
+      const subTotale = prodottiConPrezzo.reduce((sum, p) => sum + p.prezzo_totale, 0);
+      let totaleSconto = 0;
+
+      if (data.sconto_valore > 0) {
+        if (data.sconto_tipo === 'percentuale') {
+          totaleSconto = subTotale * (parseFloat(data.sconto_valore) / 100);
+        } else {
+          totaleSconto = parseFloat(data.sconto_valore);
+        }
+
+        prodottiConPrezzo.push({
+          tipo_abbonamento_nome: `Sconto (${data.sconto_tipo === 'percentuale' ? data.sconto_valore + '%' : '€' + data.sconto_valore})`,
+          quantita: 1,
+          prezzo_unitario: -totaleSconto,
+          prezzo_totale: -totaleSconto
+        });
+      }
+
+      const totale = Math.max(0, subTotale - totaleSconto);
 
       // Crea ordine
       const ordine = await neunoi.entities.OrdineCoworking.create({
@@ -189,7 +209,9 @@ export default function GestioneOrdini() {
       profilo_email: '',
       data_ordine: new Date().toISOString().split('T')[0],
       metodo_pagamento: 'non_pagato',
-      note: ''
+      note: '',
+      sconto_tipo: 'percentuale',
+      sconto_valore: 0
     });
     setProdotti([{
       tipo_abbonamento_id: '',
@@ -240,12 +262,23 @@ export default function GestioneOrdini() {
   };
 
   const calcolaTotale = () => {
-    return prodotti.reduce((sum, p) => {
+    const subTotale = prodotti.reduce((sum, p) => {
       const tipo = tipiAbbonamento.find(t => String(t.id) === String(p.tipo_abbonamento_id));
       if (!tipo) return sum;
-      const prezzo = tipo.prezzo_libero && p.prezzo_custom ? (parseFloat(p.prezzo_custom) || 0) : (tipo.prezzo || 0);
+      const prezzo = (tipo.prezzo_libero || true) && p.prezzo_custom ? (parseFloat(p.prezzo_custom) || 0) : (tipo.prezzo || 0);
       return sum + (prezzo * p.quantita);
     }, 0);
+
+    let sconto = 0;
+    if (ordineForm.sconto_valore > 0) {
+      if (ordineForm.sconto_tipo === 'percentuale') {
+        sconto = subTotale * (parseFloat(ordineForm.sconto_valore) / 100);
+      } else {
+        sconto = parseFloat(ordineForm.sconto_valore);
+      }
+    }
+
+    return Math.max(0, subTotale - sconto);
   };
 
   const ordiniFiltrati = ordini
@@ -469,7 +502,7 @@ export default function GestioneOrdini() {
                             <SelectContent>
                               {(tipiAbbonamento || []).map(t => (
                                 <SelectItem key={t.id} value={String(t.id)}>
-                                  {t.nome} - {t.prezzo_libero ? 'Prezzo Libero' : `€${t.prezzo}`}
+                                  {t.nome} - €{t.prezzo}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -485,19 +518,17 @@ export default function GestioneOrdini() {
                                 onChange={(e) => aggiornaProdotto(index, 'quantita', parseInt(e.target.value) || 1)}
                               />
                             </div>
-                            {tipoSelezionato?.prezzo_libero && (
-                              <div>
-                                <Label className="text-xs">Prezzo Personalizzato (€)</Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="Inserisci prezzo"
-                                  value={prodotto.prezzo_custom}
-                                  onChange={(e) => aggiornaProdotto(index, 'prezzo_custom', e.target.value)}
-                                />
-                              </div>
-                            )}
+                            <div>
+                              <Label className="text-xs">Prezzo Unitario (€)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder={tipoSelezionato ? `Predefinito: €${tipoSelezionato.prezzo}` : "Inserisci prezzo"}
+                                value={prodotto.prezzo_custom}
+                                onChange={(e) => aggiornaProdotto(index, 'prezzo_custom', e.target.value)}
+                              />
+                            </div>
                           </div>
                         </div>
                         {prodotti.length > 1 && (
@@ -535,6 +566,34 @@ export default function GestioneOrdini() {
                   <SelectItem value="neu">NEU</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-t pt-4">
+              <div>
+                <Label>Tipo Sconto</Label>
+                <Select
+                  value={ordineForm.sconto_tipo}
+                  onValueChange={(v) => setOrdineForm({ ...ordineForm, sconto_tipo: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentuale">Sconto %</SelectItem>
+                    <SelectItem value="fisso">Sconto Fisso (€)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Valore Sconto</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={ordineForm.sconto_valore}
+                  onChange={(e) => setOrdineForm({ ...ordineForm, sconto_valore: e.target.value })}
+                />
+              </div>
             </div>
 
             <div>
