@@ -122,7 +122,7 @@ router.post('/ProfiloCoworker/filter', async (req, res, next) => {
 }, getModel, async (req, res) => {
     try {
         const items = await req.Model.findAll({
-            where: { email: req.body.email },
+            where: sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), req.body.email.toLowerCase().trim()),
             limit: 1,
             attributes: ['id', 'first_name', 'last_name', 'email'] // Don't leak too much
         });
@@ -140,10 +140,32 @@ router.post('/ProfiloCoworker', (req, res, next) => {
     // (In realtà il socio/coworker viene creato dall'host di solito, 
     // ma supportiamo l'auto-compilazione del profilo)
     try {
-        const item = await req.Model.create(req.body);
+        const data = { ...req.body };
+
+        // Collega automaticamente all'utente se l'email esiste già
+        if (!data.user_id && data.email) {
+            const user = await models.User.findOne({ where: { email: data.email.toLowerCase().trim() } });
+            if (user) data.user_id = user.id;
+        }
+
+        const item = await req.Model.create(data);
+
+        // Invia email di benvenuto (non bloccante)
+        sendCheckInEmail(item).catch(e => console.error('[EMAIL-FAIL]', e));
+
+        // Audit Log (senza utente loggato se guest)
+        await logAudit({
+            req,
+            azione: 'create_guest_checkin',
+            modello: 'ProfiloCoworker',
+            riferimento_id: item.id,
+            dati_nuovi: item
+        });
+
         res.json(item);
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        console.error('[CHECKIN-ERROR]', error);
+        res.status(400).json({ error: error.message || 'Errore durante la creazione del profilo' });
     }
 });
 

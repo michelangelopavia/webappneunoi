@@ -99,7 +99,7 @@ export default function CheckIn() {
       }, 3000);
     } catch (error) {
       console.error('Errore salvataggio:', error);
-      toast.error('Errore durante il check-in');
+      toast.error(error.message || 'Errore durante il check-in');
     } finally {
       setSaving(false);
     }
