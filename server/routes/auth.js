@@ -119,7 +119,7 @@ router.post('/register', async (req, res) => {
 
         // Auto-create or Sync ProfiloCoworker
         const existingProfile = await ProfiloCoworker.findOne({
-            where: { email: email }
+            where: sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), email.toLowerCase().trim())
         });
 
         if (existingProfile) {

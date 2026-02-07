@@ -118,6 +118,7 @@ router.post('/ProfiloCoworker/filter', async (req, res, next) => {
     if (keys.length > 1 || keys[0] !== 'email') {
         return res.status(403).json({ error: 'Filtri non autorizzati per accesso pubblico.' });
     }
+    req.params.modelName = 'ProfiloCoworker';
     next();
 }, getModel, async (req, res) => {
     try {
