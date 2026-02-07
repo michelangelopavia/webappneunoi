@@ -2,31 +2,21 @@ const nodemailer = require('nodemailer');
 const { SistemaSetting } = require('../models');
 
 async function getTransporter() {
-  // We can use environment variables as primary source, 
-  // but the user wants to set it up.
-  // Let's use env vars for now as per image.
-
   const port = parseInt(process.env.SMTP_PORT || '465');
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
 
-  const transporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'mail.neunoi.it',
     port: port,
     secure: secure,
     auth: {
       user: process.env.SMTP_USER || 'coworking@neunoi.it',
-      pass: process.env.SMTP_PASS || 'n3un01_5p4z104ll4v0r0',
+      pass: process.env.SMTP_PASS,
     },
     tls: {
-      // Do not fail on invalid certs
       rejectUnauthorized: false
-    },
-    connectionTimeout: 10000, // 10s
-    greetingTimeout: 10000,   // 10s
-    socketTimeout: 15000      // 15s
+    }
   });
-
-  return transporter;
 }
 
 async function sendEmail({ to, subject, text, html, attachments }) {
