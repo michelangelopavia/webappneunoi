@@ -1,0 +1,30 @@
+{
+  "name": "gestione-neunoi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "check_user.js",
+  "scripts": {
+    "test": "vitest",
+    "prepare": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michelangelopavia/gestione-neunoi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/michelangelopavia/gestione-neunoi/issues"
+  },
+  "homepage": "https://github.com/michelangelopavia/gestione-neunoi#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "cross-env": "^10.1.0",
+    "husky": "^8.0.0",
+    "playwright": "^1.57.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.17"
+  }
+}

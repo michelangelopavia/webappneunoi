@@ -125,88 +125,92 @@ async function sendCheckInEmail(data) {
 }
 
 async function verifySmtpConnection() {
-  console.log('[EMAIL-DEBUG] Starting Comprehensive SMTP Connection Test...');
+  console.log('[EMAIL-DEBUG] Starting Comprehensive SMTP Connection Test (v2)...');
   const results = [];
 
-  const commonAuth = {
-    user: process.env.SMTP_USER || 'coworking@neunoi.it',
-    pass: process.env.SMTP_PASS,
-  };
+  // 0. ENV CONFIG TEST (The most important one!)
+  const envHost = process.env.SMTP_HOST;
+  const envPort = parseInt(process.env.SMTP_PORT);
+  const envSecure = process.env.SMTP_SECURE === 'true';
+  const envUser = process.env.SMTP_USER;
+  const envPass = process.env.SMTP_PASS;
 
-  // 1. NEUNOI HOSTING - Port 587
+  if (envHost && envPort) {
+    try {
+      const trans = nodemailer.createTransport({
+        host: envHost,
+        port: envPort,
+        secure: envSecure,
+        auth: { user: envUser, pass: envPass },
+        tls: { rejectUnauthorized: false }, // Allow self-signed certs for localhost
+        connectionTimeout: 5000, greetingTimeout: 3000
+      });
+      await trans.verify();
+      results.push({ config: `ENV Config (${envHost}:${envPort})`, success: true });
+    } catch (err) {
+      results.push({ config: `ENV Config (${envHost}:${envPort})`, success: false, error: err.message, code: err.code });
+    }
+  }
+
+  // 1. LOCALHOST DIRECT PORT 25 (Standard cPanel internal)
   try {
     const trans = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'mail.neunoi.it',
+      host: 'localhost',
+      port: 25,
+      secure: false, // Port 25 is never implicit SSL
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 5000, greetingTimeout: 3000
+    });
+    // For localhost port 25, we often don't need auth, or we need specific auth. 
+    // Trying without auth first (common for internal lattice)
+    await trans.verify();
+    results.push({ config: 'Localhost:25 (No Auth)', success: true });
+  } catch (err) {
+    // If auth required error, that's actually a success connection-wise!
+    if (err.code === 'EAUTH' || err.response?.includes('Authentication required')) {
+      results.push({ config: 'Localhost:25 (Auth Req)', success: true, message: 'Connected but needs auth' });
+    } else {
+      results.push({ config: 'Localhost:25 (No Auth)', success: false, error: err.message, code: err.code });
+    }
+  }
+
+  // 2. LOCALHOST PORT 587 (Submission)
+  try {
+    const trans = nodemailer.createTransport({
+      host: 'localhost',
       port: 587,
       secure: false,
-      auth: commonAuth,
-      tls: { rejectUnauthorized: false, ciphers: 'SSLv3' },
-      connectionTimeout: 5000, greetingTimeout: 3000
-    });
-    await trans.verify();
-    results.push({ config: 'Neunoi 587 (STARTTLS)', success: true });
-  } catch (err) {
-    results.push({ config: 'Neunoi 587 (STARTTLS)', success: false, error: err.message, code: err.code });
-  }
-
-  // 2. NEUNOI HOSTING - Port 465
-  try {
-    const trans = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'mail.neunoi.it',
-      port: 465,
-      secure: true,
-      auth: commonAuth,
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 5000, greetingTimeout: 3000
+      connectionTimeout: 5000
     });
     await trans.verify();
-    results.push({ config: 'Neunoi 465 (SSL)', success: true });
+    results.push({ config: 'Localhost:587', success: true });
   } catch (err) {
-    results.push({ config: 'Neunoi 465 (SSL)', success: false, error: err.message, code: err.code });
+    results.push({ config: 'Localhost:587', success: false, error: err.message, code: err.code });
   }
 
-  // 3. NEUNOI HOSTING - Port 2525 (Alternative)
-  try {
-    const trans = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'mail.neunoi.it',
-      port: 2525,
-      secure: false,
-      auth: commonAuth,
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 5000, greetingTimeout: 3000
-    });
-    await trans.verify();
-    results.push({ config: 'Neunoi 2525 (Alt)', success: true });
-  } catch (err) {
-    results.push({ config: 'Neunoi 2525 (Alt)', success: false, error: err.message, code: err.code });
-  }
-
-  // 4. CONTROL TEST - Gmail (to check if Railway blocks ALL outbound SMTP)
-  // We expect Auth failure here, NOT Timeout. If this Timeouts, Railway is blocking output.
+  // 3. EXTERNAL GMAIL (Control)
   try {
     const trans = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
-      auth: { user: 'test', pass: 'test' }, // Invalid creds
+      auth: { user: 'test', pass: 'test' },
       connectionTimeout: 5000
     });
     await trans.verify();
   } catch (err) {
-    // If error is AUTH related, connection worked!
-    if (err.code === 'EAUTH' || err.response?.includes('Username and Password not accepted')) {
-      results.push({ config: 'Global Network Check (Gmail)', success: true, message: 'Railway allows outgoing SMTP (Connection OK)' });
+    if (err.code === 'EAUTH' || err.response?.includes('Username')) {
+      results.push({ config: 'External Gmail (Outbound Check)', success: true });
     } else {
-      results.push({ config: 'Global Network Check (Gmail)', success: false, error: err.message, code: err.code });
+      results.push({ config: 'External Gmail (Outbound Check)', success: false, error: err.message });
     }
   }
 
-  const success = results.some(r => r.success && !r.config.includes('Global'));
-
   return {
-    success: success,
+    success: results.some(r => r.success),
     details: results,
-    recommendation: success ? 'Found working config!' : results.find(r => r.config.includes('Global') && r.success) ? 'Railway network is OK, but Neunoi blocks these IPs.' : 'Railway is blocking ALL outgoing SMTP.'
+    recommendation: results.some(r => r.success) ? 'Working config found!' : 'All connection attempts failed. Firewall likely blocking ports.'
   };
 }
 
