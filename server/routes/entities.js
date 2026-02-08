@@ -28,25 +28,28 @@ const getModel = (req, res, next) => {
     next();
 };
 
+// Helper to normalize roles (MySQL stores JSON as string, SQLite as object)
+const normalizeRoles = (user) => {
+    let roles = user?.roles || [user?.role];
+    if (typeof roles === 'string') {
+        try {
+            roles = JSON.parse(roles);
+        } catch {
+            roles = [roles];
+        }
+    }
+    if (!Array.isArray(roles)) {
+        roles = [roles];
+    }
+    return roles;
+};
+
 // Middleware di autorizzazione e controllo accesso dati
 const checkPermissions = (req, res, next) => {
     try {
         const { modelName } = req.params;
         const user = req.user;
-
-        // MySQL stores JSON as string, SQLite as object - normalize it
-        let roles = user?.roles || [user?.role];
-        if (typeof roles === 'string') {
-            try {
-                roles = JSON.parse(roles);
-            } catch {
-                roles = [roles];
-            }
-        }
-        if (!Array.isArray(roles)) {
-            roles = [roles];
-        }
-
+        const roles = normalizeRoles(user);
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
 
         // 1. Modelli sensibili accessibili solo ad Admin/Host
@@ -310,7 +313,7 @@ router.get('/:modelName/:id', getModel, checkPermissions, async (req, res) => {
         if (!item) return res.status(404).json({ error: 'Item not found' });
 
         // Verifica proprietà finale per utenti non admin
-        const roles = req.user.roles || [req.user.role];
+        const roles = normalizeRoles(req.user);
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
         const { modelName } = req.params;
         const isOwner = (modelName === 'User' && item.id === req.user.id) ||
@@ -528,7 +531,7 @@ router.patch('/:modelName/:id', getModel, checkPermissions, async (req, res) => 
         if (!item) return res.status(404).json({ error: 'Item not found' });
 
         // Verifica proprietà per utenti non admin
-        const roles = req.user.roles || [req.user.role];
+        const roles = normalizeRoles(req.user);
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
 
         const isOwner = (modelName === 'User' && item.id === req.user.id) ||
@@ -600,7 +603,7 @@ router.delete('/:modelName/:id', getModel, checkPermissions, async (req, res) =>
         if (!item) return res.status(404).json({ error: 'Item not found' });
 
         // Verifica proprietà per utenti non admin
-        const roles = req.user.roles || [req.user.role];
+        const roles = normalizeRoles(req.user);
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
 
         const isOwner = (modelName === 'User' && item.id === req.user.id) ||
