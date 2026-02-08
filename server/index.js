@@ -161,6 +161,26 @@ app.post('/api/admin/restore-db', authMiddleware, adminOnly, upload.single('data
     }
 });
 
+app.get('/api/admin/test-email-connection', authMiddleware, adminOnly, async (req, res) => {
+    try {
+        const { verifySmtpConnection } = require('./utils/email');
+        const result = await verifySmtpConnection();
+
+        res.json({
+            timestamp: new Date().toISOString(),
+            debug_info: {
+                host: process.env.SMTP_HOST || 'using-default',
+                port: process.env.SMTP_PORT || 'using-default',
+                secure_env_value: process.env.SMTP_SECURE,
+                user: process.env.SMTP_USER || 'using-default'
+            },
+            connection_result: result
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message, stack: e.stack });
+    }
+});
+
 app.get('/api/backup-database-neunoi', authMiddleware, adminOnly, (req, res) => {
     const dbPath = process.env.DB_STORAGE || path.join(__dirname, 'database.sqlite');
     if (fs.existsSync(dbPath)) {

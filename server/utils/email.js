@@ -120,7 +120,30 @@ async function sendCheckInEmail(data) {
   }
 }
 
+async function verifySmtpConnection() {
+  console.log('[EMAIL-DEBUG] Testing SMTP Connection...');
+  try {
+    const transporter = await getTransporter();
+    await transporter.verify();
+    console.log('[EMAIL-DEBUG] SMTP Connection Successful');
+    return { success: true, message: 'SMTP connection established successfully' };
+  } catch (error) {
+    console.error('[EMAIL-DEBUG] SMTP Connection Failed:', error);
+    return {
+      success: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        response: error.response,
+        command: error.command,
+        stack: error.stack
+      }
+    };
+  }
+}
+
 module.exports = {
   sendEmail,
-  sendCheckInEmail
+  sendCheckInEmail,
+  verifySmtpConnection
 };
