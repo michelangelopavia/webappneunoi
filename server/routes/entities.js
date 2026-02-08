@@ -201,7 +201,8 @@ router.get('/:modelName/list', getModel, checkPermissions, async (req, res) => {
         const items = await req.Model.findAll(options);
         res.json(items);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error(`[ENTITIES-LIST-ERROR] Model: ${req.params.modelName}`, error);
+        res.status(500).json({ error: 'Something went wrong!', details: error.message, sql: error.sql });
     }
 });
 
@@ -261,7 +262,8 @@ router.post('/:modelName/filter', getModel, checkPermissions, async (req, res) =
         const items = await req.Model.findAll(options);
         res.json(items);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error(`[ENTITIES-FILTER-ERROR] Model: ${req.params.modelName}`, error);
+        res.status(500).json({ error: 'Something went wrong!', details: error.message, sql: error.sql });
     }
 });
 
