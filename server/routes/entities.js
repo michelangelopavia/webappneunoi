@@ -33,7 +33,20 @@ const checkPermissions = (req, res, next) => {
     try {
         const { modelName } = req.params;
         const user = req.user;
-        const roles = user?.roles || [user?.role];
+
+        // MySQL stores JSON as string, SQLite as object - normalize it
+        let roles = user?.roles || [user?.role];
+        if (typeof roles === 'string') {
+            try {
+                roles = JSON.parse(roles);
+            } catch {
+                roles = [roles];
+            }
+        }
+        if (!Array.isArray(roles)) {
+            roles = [roles];
+        }
+
         const isAdminOrHost = roles.some(r => ['admin', 'super_admin', 'host'].includes(r));
 
         // 1. Modelli sensibili accessibili solo ad Admin/Host
