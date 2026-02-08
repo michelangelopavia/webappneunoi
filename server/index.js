@@ -305,67 +305,16 @@ app.get('/api/system-diag', authMiddleware, adminOnly, async (req, res) => {
 
         res.json({
             status: 'online',
+            db_dialect: sequelize.getDialect(),
+            db_host: process.env.DB_HOST || 'localhost',
+            db_name: process.env.DB_NAME || 'not set',
             db_storage_env: process.env.DB_STORAGE || 'not set',
-            db_path_resolved: path.resolve(process.env.DB_STORAGE || './database.sqlite'),
             counts,
             env: process.env.NODE_ENV,
-            railway_static_url: process.env.RAILWAY_STATIC_URL || 'not set',
             time: new Date().toISOString()
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
-    }
-});
-
-// --- TEMPORARY MIGRATION ROUTE ---
-// To be used once to move data from SQLite to MySQL on cPanel
-app.get('/api/admin/migrate-from-sqlite', async (req, res) => {
-    const { Sequelize } = require('sequelize');
-    const models = require('./models');
-
-    try {
-        const sqlitePath = path.join(__dirname, 'database.sqlite');
-        if (!fs.existsSync(sqlitePath)) {
-            return res.status(404).json({ error: 'File database.sqlite non trovato in /server/. Caricalo prima!' });
-        }
-
-        const source = new Sequelize({
-            dialect: 'sqlite',
-            storage: sqlitePath,
-            logging: false
-        });
-
-        const results = [];
-        // Ordine critico per le chiavi esterne
-        const modelNames = [
-            'User', 'ProfiloSocio', 'ProfiloCoworker', 'DatiFatturazione',
-            'TipoAbbonamento', 'AbbonamentoUtente', 'SalaRiunioni', 'PrenotazioneSala',
-            'IngressoCoworking', 'OrdineCoworking', 'AmbitoVolontariato',
-            'AzioneVolontariato', 'DichiarazioneVolontariato', 'TurnoHost',
-            'TransazioneNEU', 'NotificaAbbonamento', 'TaskNotifica',
-            'SistemaSetting', 'AuditLog'
-        ];
-
-        // Puliamo il DB MySQL prima di iniziare (opzionale, ma consigliato per coerenza)
-        await sequelize.sync({ force: true });
-
-        for (const name of modelNames) {
-            const Model = models[name];
-            const SourceModel = source.define(name, Model.rawAttributes, { tableName: Model.tableName });
-            const data = await SourceModel.findAll({ raw: true });
-
-            if (data.length > 0) {
-                await Model.bulkCreate(data);
-                results.push(`${name}: ${data.length} record migrati`);
-            } else {
-                results.push(`${name}: 0 record`);
-            }
-        }
-
-        res.json({ message: 'Migrazione completata con successo!', dettagli: results });
-    } catch (error) {
-        console.error('Migrazione fallita:', error);
-        res.status(500).json({ error: error.message });
     }
 });
 
@@ -398,30 +347,46 @@ const { User } = require('./models');
 sequelize.sync({ force: false }).then(async () => {
     console.log('Database synced');
 
-    // Manual SQL Migration for SQLite (since alter:true is failing)
-    try {
-        const queryInterface = sequelize.getQueryInterface();
-        const [results] = await sequelize.query("PRAGMA table_info(Users);");
-        const columns = results.map(r => r.name);
+    console.log(`[DB] Using dialect: ${sequelize.getDialect()}`);
 
-        if (!columns.includes('email_verified')) {
-            await sequelize.query("ALTER TABLE Users ADD COLUMN email_verified BOOLEAN DEFAULT 0;");
-            console.log('[MIGRATION] Added email_verified');
-        }
-        if (!columns.includes('verification_token')) {
-            await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token TEXT;");
-            console.log('[MIGRATION] Added verification_token');
-        }
-        if (!columns.includes('verification_token_expires')) {
-            await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token_expires DATETIME;");
-            console.log('[MIGRATION] Added verification_token_expires');
+    // Manual SQL Migration (dialect aware)
+    try {
+        const dialect = sequelize.getDialect();
+        if (dialect === 'sqlite') {
+            const [results] = await sequelize.query("PRAGMA table_info(Users);");
+            const columns = results.map(r => r.name);
+
+            if (!columns.includes('email_verified')) {
+                await sequelize.query("ALTER TABLE Users ADD COLUMN email_verified BOOLEAN DEFAULT 0;");
+                console.log('[MIGRATION] Added email_verified');
+            }
+            if (!columns.includes('verification_token')) {
+                await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token TEXT;");
+                console.log('[MIGRATION] Added verification_token');
+            }
+            if (!columns.includes('verification_token_expires')) {
+                await sequelize.query("ALTER TABLE Users ADD COLUMN verification_token_expires DATETIME;");
+                console.log('[MIGRATION] Added verification_token_expires');
+            }
+        } else if (dialect === 'mysql') {
+            // MySQL usually handles migrations via sync(alter:true) or migrations, 
+            // but we ensure columns exist if needed for this specific app state
+            const [results] = await sequelize.query(`SHOW COLUMNS FROM Users`);
+            const columns = results.map(r => r.Field);
+
+            if (!columns.includes('email_verified')) {
+                await sequelize.query("ALTER TABLE Users ADD COLUMN email_verified BOOLEAN DEFAULT 0");
+            }
+            // Add other columns similarly for MySQL if they were missing in the source
         }
     } catch (err) {
-        console.warn('[MIGRATION] Column check/add failed (might already be ok):', err.message);
+        console.warn('[MIGRATION] Column check/add failed:', err.message);
     }
 
-    // Seed default admin if no users exist
+    // Seed default admin ONLY if truly empty
     const userCount = await User.count();
+    console.log(`[DB] Total users in database: ${userCount}`);
+
     if (userCount === 0) {
         const hashedPassword = await bcrypt.hash('password123', 10);
         await User.create({
