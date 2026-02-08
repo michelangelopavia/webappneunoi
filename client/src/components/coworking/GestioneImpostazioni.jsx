@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Save, RefreshCcw, Info } from 'lucide-react';
+import { Mail, Save, RefreshCcw, Info, Activity } from 'lucide-react';
 
 export default function GestioneImpostazioni() {
     const queryClient = useQueryClient();
@@ -106,6 +106,46 @@ export default function GestioneImpostazioni() {
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm">In futuro potrai gestire qui anche i template per le ricevute, le notifiche di scadenza abbonamento e i promemoria task.</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-purple-600" />
+                        Diagnostica di Sistema
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between p-4 bg-slate-50 border rounded-lg">
+                            <div>
+                                <h3 className="font-semibold">Test Connessione Email</h3>
+                                <p className="text-sm text-slate-500">Verifica se il server riesce a connettersi al provider SMTP.</p>
+                            </div>
+                            <Button
+                                onClick={async () => {
+                                    try {
+                                        toast.loading('Test connessione in corso...');
+                                        const res = await neunoi.admin.testEmailConnection();
+                                        toast.dismiss();
+                                        if (res.connection_result?.success) {
+                                            toast.success('✅ Connessione SMTP Riuscita!');
+                                        } else {
+                                            toast.error('❌ Connessione Fallita');
+                                            console.error('SMTP Error:', res);
+                                            alert(JSON.stringify(res, null, 2));
+                                        }
+                                    } catch (e) {
+                                        toast.dismiss();
+                                        toast.error('Errore chiamata API: ' + e.message);
+                                    }
+                                }}
+                                variant="outline"
+                            >
+                                Esegui Test
+                            </Button>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

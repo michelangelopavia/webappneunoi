@@ -2,19 +2,22 @@ const nodemailer = require('nodemailer');
 const { SistemaSetting } = require('../models');
 
 async function getTransporter() {
-  const port = parseInt(process.env.SMTP_PORT || '465');
+  const port = parseInt(process.env.SMTP_PORT || '587'); // Default to 587 for better cloud compatibility
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+
+  console.log(`[EMAIL-CONFIG] Connecting to ${process.env.SMTP_HOST || 'mail.neunoi.it'} on port ${port} (secure: ${secure})`);
 
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'mail.neunoi.it',
     port: port,
-    secure: secure,
+    secure: secure, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER || 'coworking@neunoi.it',
       pass: process.env.SMTP_PASS,
     },
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
     }
   });
 }

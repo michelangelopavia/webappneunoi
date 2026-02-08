@@ -159,6 +159,12 @@ export const neunoi = {
                 headers: getHeaders()
             });
             return handleResponse(res);
+        },
+        testEmailConnection: async () => {
+            const res = await fetchWithTimeout(`${API_URL}/api/admin/test-email-connection`, {
+                headers: getHeaders()
+            });
+            return handleResponse(res);
         }
     },
     auth: {
