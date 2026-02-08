@@ -163,7 +163,7 @@ export const neunoi = {
         testEmailConnection: async () => {
             const res = await fetchWithTimeout(`${API_URL}/api/admin/test-email-connection`, {
                 headers: getHeaders()
-            });
+            }, 40000);
             return handleResponse(res);
         }
     },
