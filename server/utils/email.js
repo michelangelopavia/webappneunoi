@@ -127,55 +127,85 @@ async function verifySmtpConnection() {
   console.log('[EMAIL-DEBUG] Starting Comprehensive SMTP Connection Test...');
   const results = [];
 
-  // Configuration 1: Port 587 (STARTTLS) - standard for modern submission
+  const commonAuth = {
+    user: process.env.SMTP_USER || 'coworking@neunoi.it',
+    pass: process.env.SMTP_PASS,
+  };
+
+  // 1. NEUNOI HOSTING - Port 587
   try {
-    console.log('[EMAIL-DEBUG] Testing Config 1: Port 587 (STARTTLS)');
-    const trans1 = nodemailer.createTransport({
+    const trans = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'mail.neunoi.it',
       port: 587,
       secure: false,
-      auth: {
-        user: process.env.SMTP_USER || 'coworking@neunoi.it',
-        pass: process.env.SMTP_PASS,
-      },
+      auth: commonAuth,
       tls: { rejectUnauthorized: false, ciphers: 'SSLv3' },
-      connectionTimeout: 10000, // Fail fast (10s)
-      greetingTimeout: 5000
+      connectionTimeout: 5000, greetingTimeout: 3000
     });
-    await trans1.verify();
-    results.push({ config: '587 (STARTTLS)', success: true, message: 'Connected successfully!' });
+    await trans.verify();
+    results.push({ config: 'Neunoi 587 (STARTTLS)', success: true });
   } catch (err) {
-    results.push({ config: '587 (STARTTLS)', success: false, error: err.message, code: err.code });
+    results.push({ config: 'Neunoi 587 (STARTTLS)', success: false, error: err.message, code: err.code });
   }
 
-  // Configuration 2: Port 465 (Secure SSL) - legacy but common
+  // 2. NEUNOI HOSTING - Port 465
   try {
-    console.log('[EMAIL-DEBUG] Testing Config 2: Port 465 (SSL)');
-    const trans2 = nodemailer.createTransport({
+    const trans = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'mail.neunoi.it',
       port: 465,
       secure: true,
-      auth: {
-        user: process.env.SMTP_USER || 'coworking@neunoi.it',
-        pass: process.env.SMTP_PASS,
-      },
+      auth: commonAuth,
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 10000, // Fail fast (10s)
-      greetingTimeout: 5000
+      connectionTimeout: 5000, greetingTimeout: 3000
     });
-    await trans2.verify();
-    results.push({ config: '465 (SSL)', success: true, message: 'Connected successfully!' });
+    await trans.verify();
+    results.push({ config: 'Neunoi 465 (SSL)', success: true });
   } catch (err) {
-    results.push({ config: '465 (SSL)', success: false, error: err.message, code: err.code });
+    results.push({ config: 'Neunoi 465 (SSL)', success: false, error: err.message, code: err.code });
   }
 
-  const success = results.some(r => r.success);
-  console.log('[EMAIL-DEBUG] Test finished. Success:', success);
+  // 3. NEUNOI HOSTING - Port 2525 (Alternative)
+  try {
+    const trans = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'mail.neunoi.it',
+      port: 2525,
+      secure: false,
+      auth: commonAuth,
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 5000, greetingTimeout: 3000
+    });
+    await trans.verify();
+    results.push({ config: 'Neunoi 2525 (Alt)', success: true });
+  } catch (err) {
+    results.push({ config: 'Neunoi 2525 (Alt)', success: false, error: err.message, code: err.code });
+  }
+
+  // 4. CONTROL TEST - Gmail (to check if Railway blocks ALL outbound SMTP)
+  // We expect Auth failure here, NOT Timeout. If this Timeouts, Railway is blocking output.
+  try {
+    const trans = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: 'test', pass: 'test' }, // Invalid creds
+      connectionTimeout: 5000
+    });
+    await trans.verify();
+  } catch (err) {
+    // If error is AUTH related, connection worked!
+    if (err.code === 'EAUTH' || err.response?.includes('Username and Password not accepted')) {
+      results.push({ config: 'Global Network Check (Gmail)', success: true, message: 'Railway allows outgoing SMTP (Connection OK)' });
+    } else {
+      results.push({ config: 'Global Network Check (Gmail)', success: false, error: err.message, code: err.code });
+    }
+  }
+
+  const success = results.some(r => r.success && !r.config.includes('Global'));
 
   return {
     success: success,
     details: results,
-    recommendation: success ? 'Use the working configuration.' : 'Both ports blocked. Possible Firewall issue on Railway or Mail Server.'
+    recommendation: success ? 'Found working config!' : results.find(r => r.config.includes('Global') && r.success) ? 'Railway network is OK, but Neunoi blocks these IPs.' : 'Railway is blocking ALL outgoing SMTP.'
   };
 }
 
