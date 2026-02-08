@@ -194,7 +194,10 @@ router.get('/:modelName/list', getModel, checkPermissions, async (req, res) => {
         if (limit) options.limit = parseInt(limit);
         if (offset) options.offset = parseInt(offset);
 
-        if (include === 'all') {
+        // Temporary fix: disable include=all for models with complex relations on MySQL
+        // to avoid timeouts while we investigate foreign key issues
+        const problematicModels = ['DichiarazioneVolontariato', 'TransazioneNEU', 'AmbitoVolontariato', 'AzioneVolontariato'];
+        if (include === 'all' && !problematicModels.includes(req.params.modelName)) {
             options.include = { all: true };
         }
 
@@ -257,7 +260,12 @@ router.post('/:modelName/filter', getModel, checkPermissions, async (req, res) =
         }
         if (limit) options.limit = parseInt(limit);
         if (offset) options.offset = parseInt(offset);
-        if (include === 'all') options.include = { all: true };
+
+        // Temporary fix: disable include=all for models with complex relations on MySQL
+        const problematicModels = ['DichiarazioneVolontariato', 'TransazioneNEU', 'AmbitoVolontariato', 'AzioneVolontariato'];
+        if (include === 'all' && !problematicModels.includes(req.params.modelName)) {
+            options.include = { all: true };
+        }
 
         const items = await req.Model.findAll(options);
         res.json(items);
