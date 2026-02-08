@@ -22,6 +22,18 @@ const sequelize = process.env.DB_DIALECT === 'mysql'
             min: 0,
             acquire: 30000,
             idle: 10000
+        },
+        define: {
+            charset: 'utf8mb4',
+            collate: 'utf8mb4_unicode_ci',
+            freezeTableName: false,
+            timestamps: true,
+            // Don't enforce foreign key constraints strictly
+            underscored: false
+        },
+        // Make MySQL behave more like SQLite
+        dialectOptions: {
+            decimalNumbers: true
         }
     })
     : new Sequelize({
