@@ -321,6 +321,58 @@ app.get('/api/*', (req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });
 });
 
+// --- TEMPORARY MIGRATION ROUTE ---
+// To be used once to move data from SQLite to MySQL on cPanel
+app.get('/api/admin/migrate-from-sqlite', async (req, res) => {
+    const { Sequelize } = require('sequelize');
+    const models = require('./models');
+
+    try {
+        const sqlitePath = path.join(__dirname, 'database.sqlite');
+        if (!fs.existsSync(sqlitePath)) {
+            return res.status(404).json({ error: 'File database.sqlite non trovato in /server/. Caricalo prima!' });
+        }
+
+        const source = new Sequelize({
+            dialect: 'sqlite',
+            storage: sqlitePath,
+            logging: false
+        });
+
+        const results = [];
+        // Ordine critico per le chiavi esterne
+        const modelNames = [
+            'User', 'ProfiloSocio', 'ProfiloCoworker', 'DatiFatturazione',
+            'TipoAbbonamento', 'AbbonamentoUtente', 'SalaRiunioni', 'PrenotazioneSala',
+            'IngressoCoworking', 'OrdineCoworking', 'AmbitoVolontariato',
+            'AzioneVolontariato', 'DichiarazioneVolontariato', 'TurnoHost',
+            'TransazioneNEU', 'NotificaAbbonamento', 'TaskNotifica',
+            'SistemaSetting', 'AuditLog'
+        ];
+
+        // Puliamo il DB MySQL prima di iniziare (opzionale, ma consigliato per coerenza)
+        await sequelize.sync({ force: true });
+
+        for (const name of modelNames) {
+            const Model = models[name];
+            const SourceModel = source.define(name, Model.rawAttributes, { tableName: Model.tableName });
+            const data = await SourceModel.findAll({ raw: true });
+
+            if (data.length > 0) {
+                await Model.bulkCreate(data);
+                results.push(`${name}: ${data.length} record migrati`);
+            } else {
+                results.push(`${name}: 0 record`);
+            }
+        }
+
+        res.json({ message: 'Migrazione completata con successo!', dettagli: results });
+    } catch (error) {
+        console.error('Migrazione fallita:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
 if (process.env.NODE_ENV === 'production') {
