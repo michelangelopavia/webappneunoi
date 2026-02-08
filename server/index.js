@@ -33,18 +33,19 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "blob:", "https://*"],
-            connectSrc: ["'self'", "https://*"]
+            imgSrc: ["'self'", "data:", "blob:", "https://*", "http://*"],
+            connectSrc: ["'self'", "https://*", "http://*"]
         }
     },
     hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
         preload: true
-    }
+    },
+    crossOriginEmbedderPolicy: false
 }));
 
 // Rate Limiting
