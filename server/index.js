@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 const sequelize = require('./database');
+const models = require('./models');
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
