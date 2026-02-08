@@ -317,10 +317,6 @@ app.get('/api/system-diag', authMiddleware, adminOnly, async (req, res) => {
     }
 });
 
-app.get('/api/*', (req, res) => {
-    res.status(404).json({ error: 'API endpoint not found' });
-});
-
 // --- TEMPORARY MIGRATION ROUTE ---
 // To be used once to move data from SQLite to MySQL on cPanel
 app.get('/api/admin/migrate-from-sqlite', async (req, res) => {
@@ -371,6 +367,10 @@ app.get('/api/admin/migrate-from-sqlite', async (req, res) => {
         console.error('Migrazione fallita:', error);
         res.status(500).json({ error: error.message });
     }
+});
+
+app.get('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
 });
 
 // The "catchall" handler: for any request that doesn't
