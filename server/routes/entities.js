@@ -55,7 +55,13 @@ const checkPermissions = (req, res, next) => {
         // 1. Modelli sensibili accessibili solo ad Admin/Host
         const sensitiveModels = ['User', 'TransazioneNEU', 'OrdineCoworking', 'AbbonamentoUtente', 'SistemaSetting', 'AzioneVolontariato', 'AmbitoVolontariato', 'DichiarazioneVolontariato', 'IngressoCoworking', 'PrenotazioneSala'];
 
-        if (sensitiveModels.includes(modelName) && !isAdminOrHost) {
+        // Admin/Host possono accedere a tutto liberamente
+        if (isAdminOrHost) {
+            return next();
+        }
+
+        // Per utenti non-admin, applichiamo restrizioni
+        if (sensitiveModels.includes(modelName)) {
             // Modelli che i soci possono LEGGERE liberamente (per dropdown e info)
             const memberReadModels = ['AzioneVolontariato', 'AmbitoVolontariato'];
             if (memberReadModels.includes(modelName) && (req.method === 'GET' || req.path.endsWith('/list') || req.path.endsWith('/filter'))) {
@@ -68,14 +74,6 @@ const checkPermissions = (req, res, next) => {
             if (userOwnedModels.includes(modelName)) {
                 // 1a. LIST (lista generica): Forziamo il filtraggio per evitare leak di altri utenti
                 if (req.path.endsWith('/list')) {
-                    // Per la lista semplice, non possiamo iniettare filtri facilmente in req.body
-                    // perché Sequelize findAll non legge il body. Dobbiamo fallire e forzare l'uso di /filter
-                    // EXCEPTION: Se è Transaction, permettiamo solo se l'utente è coinvolto?
-                    // In realtà, il frontend usa .list() che chiama /list.
-                    // Correggiamo: permettiamo il list ma il controller dovrà filtrare (o usiamo filter nel frontend)
-                    // Per ora, convertiamo il list in un filter-like check se possibile?
-                    // No, blocchiamo il list e assicuriamoci che il frontend usi filter (mieiNEU lo fa per i turni?)
-                    // AGGIORNAMENTO: Permettiamo il passaggio ma logghiamo? No, meglio bloccare.
                     return res.status(403).json({ error: `Per motivi di sicurezza, usa il filtro (filter) per accedere ai tuoi dati di ${modelName}.` });
                 }
 
