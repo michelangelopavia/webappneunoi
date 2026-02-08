@@ -124,25 +124,59 @@ async function sendCheckInEmail(data) {
 }
 
 async function verifySmtpConnection() {
-  console.log('[EMAIL-DEBUG] Testing SMTP Connection...');
+  console.log('[EMAIL-DEBUG] Starting Comprehensive SMTP Connection Test...');
+  const results = [];
+
+  // Configuration 1: Port 587 (STARTTLS) - standard for modern submission
   try {
-    const transporter = await getTransporter();
-    await transporter.verify();
-    console.log('[EMAIL-DEBUG] SMTP Connection Successful');
-    return { success: true, message: 'SMTP connection established successfully' };
-  } catch (error) {
-    console.error('[EMAIL-DEBUG] SMTP Connection Failed:', error);
-    return {
-      success: false,
-      error: {
-        message: error.message,
-        code: error.code,
-        response: error.response,
-        command: error.command,
-        stack: error.stack
-      }
-    };
+    console.log('[EMAIL-DEBUG] Testing Config 1: Port 587 (STARTTLS)');
+    const trans1 = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'mail.neunoi.it',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER || 'coworking@neunoi.it',
+        pass: process.env.SMTP_PASS,
+      },
+      tls: { rejectUnauthorized: false, ciphers: 'SSLv3' },
+      connectionTimeout: 10000, // Fail fast (10s)
+      greetingTimeout: 5000
+    });
+    await trans1.verify();
+    results.push({ config: '587 (STARTTLS)', success: true, message: 'Connected successfully!' });
+  } catch (err) {
+    results.push({ config: '587 (STARTTLS)', success: false, error: err.message, code: err.code });
   }
+
+  // Configuration 2: Port 465 (Secure SSL) - legacy but common
+  try {
+    console.log('[EMAIL-DEBUG] Testing Config 2: Port 465 (SSL)');
+    const trans2 = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'mail.neunoi.it',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.SMTP_USER || 'coworking@neunoi.it',
+        pass: process.env.SMTP_PASS,
+      },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000, // Fail fast (10s)
+      greetingTimeout: 5000
+    });
+    await trans2.verify();
+    results.push({ config: '465 (SSL)', success: true, message: 'Connected successfully!' });
+  } catch (err) {
+    results.push({ config: '465 (SSL)', success: false, error: err.message, code: err.code });
+  }
+
+  const success = results.some(r => r.success);
+  console.log('[EMAIL-DEBUG] Test finished. Success:', success);
+
+  return {
+    success: success,
+    details: results,
+    recommendation: success ? 'Use the working configuration.' : 'Both ports blocked. Possible Firewall issue on Railway or Mail Server.'
+  };
 }
 
 module.exports = {
