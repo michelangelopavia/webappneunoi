@@ -349,6 +349,39 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
+// Temporary diagnostic route to debug MySQL issues
+app.get('/api/test-db', async (req, res) => {
+    const results = [];
+    try {
+        results.push({ step: 'Connection info', dialect: sequelize.getDialect(), database: process.env.DB_NAME });
+
+        await sequelize.authenticate();
+        results.push({ step: 'Authenticate', status: 'success' });
+
+        const userCount = await models.User.count();
+        results.push({ step: 'User.count()', status: 'success', count: userCount });
+
+        const users = await models.User.findAll({ limit: 1 });
+        results.push({ step: 'User.findAll(limit:1)', status: 'success', found: users.length });
+
+        const profili = await models.ProfiloSocio.findAll({ limit: 1 });
+        results.push({ step: 'ProfiloSocio.findAll(limit:1)', status: 'success', found: profili.length });
+
+        res.json({ success: true, results });
+    } catch (error) {
+        results.push({
+            step: 'ERROR',
+            message: error.message,
+            sql: error.sql,
+            code: error.code,
+            errno: error.errno,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage
+        });
+        res.status(500).json({ success: false, results, fullError: error.toString() });
+    }
+});
+
 app.get('/api/*', (req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });
 });
