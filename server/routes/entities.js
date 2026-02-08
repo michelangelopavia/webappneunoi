@@ -9,6 +9,14 @@ const authMiddleware = require('../middleware/auth');
 const { Op } = require('sequelize');
 const { logAudit } = require('../utils/audit');
 
+// VERSION MARKER - Updated 2026-02-08 22:00
+const ENTITIES_VERSION = '2026-02-08-22:00-MYSQL-FIX';
+
+// Test route to verify version
+router.get('/version-check', (req, res) => {
+    res.json({ version: ENTITIES_VERSION, timestamp: new Date().toISOString() });
+});
+
 // Generic handler middleware to get model
 const getModel = (req, res, next) => {
     const { modelName } = req.params;
