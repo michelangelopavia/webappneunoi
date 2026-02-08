@@ -14,6 +14,7 @@ process.on('uncaughtException', (err, origin) => {
 });
 
 const app = express();
+app.set('trust proxy', 1); // Trust Railway implementation
 const PORT = process.env.PORT || 3000;
 const helmet = require('helmet');
 
