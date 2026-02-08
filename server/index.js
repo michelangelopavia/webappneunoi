@@ -318,6 +318,37 @@ app.get('/api/system-diag', authMiddleware, adminOnly, async (req, res) => {
     }
 });
 
+// Public diagnostic endpoint (no auth required)
+app.get('/api/health', async (req, res) => {
+    try {
+        const { User } = require('./models');
+        const userCount = await User.count();
+
+        res.json({
+            status: 'ok',
+            database: {
+                dialect: sequelize.getDialect(),
+                host: process.env.DB_HOST || 'not set',
+                name: process.env.DB_NAME || 'not set',
+                user: process.env.DB_USER || 'not set'
+            },
+            counts: {
+                users: userCount
+            },
+            env: {
+                NODE_ENV: process.env.NODE_ENV,
+                DB_DIALECT: process.env.DB_DIALECT || 'not set'
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            error: error.message,
+            stack: error.stack
+        });
+    }
+});
+
 app.get('/api/*', (req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });
 });
