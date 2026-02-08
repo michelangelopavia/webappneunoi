@@ -14,6 +14,11 @@ process.on('uncaughtException', (err, origin) => {
 });
 
 const app = express();
+
+// Serve static files from the React app
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, 'public')));
+}
 app.set('trust proxy', 1); // Trust Railway implementation
 const PORT = process.env.PORT || 3000;
 const helmet = require('helmet');
@@ -311,9 +316,21 @@ app.get('/api/system-diag', authMiddleware, adminOnly, async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => {
-    res.json({ message: 'Neu Noi Gestione Associazione API' });
+app.get('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
 });
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+if (process.env.NODE_ENV === 'production') {
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    });
+} else {
+    app.get('/', (req, res) => {
+        res.json({ message: 'Neu Noi Gestione Associazione API (Dev Mode)' });
+    });
+}
 
 // Error handling
 app.use((err, req, res, next) => {

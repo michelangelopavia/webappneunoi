@@ -11,3 +11,5 @@ Feedback/Sicurezza.zip
 server/migrate_*.js
 .DS_Store
 
+
+node_modules
